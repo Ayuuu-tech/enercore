@@ -9,6 +9,7 @@ import '../../features/dashboard/presentation/screens/client_dashboard_screen.da
 import '../../features/telemetry/presentation/screens/solar_grid_screen.dart';
 import '../../features/telemetry/presentation/screens/telemetry_dashboard_screen.dart';
 import '../../features/marketplace/presentation/screens/marketplace_home_screen.dart';
+import '../../features/marketplace/presentation/screens/product_detail_screen.dart';
 import '../../features/ticketing/presentation/screens/tickets_list_screen.dart';
 import '../../features/ticketing/presentation/screens/create_ticket_screen.dart';
 import '../../features/ticketing/presentation/screens/ticket_detail_screen.dart';
@@ -66,6 +67,10 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/marketplace',
       builder: (context, state) => const MarketplaceHomeScreen(),
+    ),
+    GoRoute(
+      path: '/product-detail',
+      builder: (context, state) => const ProductDetailScreen(),
     ),
     GoRoute(
       path: '/tickets',

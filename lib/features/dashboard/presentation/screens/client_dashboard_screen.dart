@@ -800,6 +800,7 @@ class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
       (Icons.confirmation_number_outlined, 'New Ticket', '/create-ticket'),
       (Icons.receipt_long_outlined, 'Invoice', '/billing'),
       (Icons.bar_chart_rounded, 'Reports', '/telemetry'),
+      (Icons.shopping_bag_outlined, 'Shop', '/marketplace'),
     ];
     return _card_(
       child: Column(
