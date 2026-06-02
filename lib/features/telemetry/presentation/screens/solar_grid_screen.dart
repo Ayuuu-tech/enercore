@@ -717,10 +717,11 @@ class _SolarGridScreenState extends State<SolarGridScreen> {
       (Icons.home_rounded, 'Home'),
       (Icons.solar_power_rounded, 'Plants'),
       (Icons.sensors_rounded, 'Telemetry'),
+      (Icons.receipt_long_rounded, 'Billing'),
       (Icons.confirmation_number_outlined, 'Tickets'),
       (Icons.person_outline_rounded, 'Profile'),
     ];
-    final routes = ['/client-dashboard', null, '/telemetry', '/tickets', '/profile'];
+    final routes = ['/client-dashboard', null, '/telemetry', '/billing', '/tickets', '/profile'];
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -728,7 +729,7 @@ class _SolarGridScreenState extends State<SolarGridScreen> {
           top: BorderSide(color: _cardBorder, width: 1),
         ),
       ),
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: List.generate(items.length, (i) {
@@ -743,21 +744,21 @@ class _SolarGridScreenState extends State<SolarGridScreen> {
             },
             child: Container(
               color: Colors.transparent,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
                     items[i].$1,
                     color: active ? _teal : _slateLight.withValues(alpha: 0.6),
-                    size: 22,
+                    size: 20,
                   ),
                   const SizedBox(height: 4),
                   Text(
                     items[i].$2,
                     style: TextStyle(
                       color: active ? _teal : _slateLight.withValues(alpha: 0.7),
-                      fontSize: 10,
+                      fontSize: 9,
                       fontWeight: active ? FontWeight.w700 : FontWeight.w500,
                     ),
                   ),
