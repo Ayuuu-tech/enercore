@@ -10,7 +10,7 @@ class MarketplaceHomeScreen extends StatefulWidget {
 
 class _MarketplaceHomeScreenState extends State<MarketplaceHomeScreen> {
   int _selectedFilter = 0;
-  int _selectedNav = -1; // Sub-marketplace navigation
+  final int _selectedNav = -1; // Sub-marketplace navigation
 
   // Premium Design System
   static const _bg = Color(0xFFF4F6F8);
@@ -436,11 +436,7 @@ class _MarketplaceHomeScreenState extends State<MarketplaceHomeScreen> {
           final active = _selectedNav == i;
           return GestureDetector(
             onTap: () {
-              if (routes[i] != null) {
-                context.push(routes[i]!);
-              } else {
-                setState(() => _selectedNav = i);
-              }
+              context.push(routes[i]);
             },
             child: Container(
               color: Colors.transparent,

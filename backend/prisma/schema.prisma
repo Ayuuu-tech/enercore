@@ -1,0 +1,222 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  CLIENT
+  ADMIN
+  VENDOR
+}
+
+enum PanelStatus {
+  HEALTHY
+  WARNING
+  FAULT
+  OFFLINE
+}
+
+enum InvoiceStatus {
+  PAID
+  OVERDUE
+  PENDING
+}
+
+enum OrderStatus {
+  PENDING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model User {
+  id             String          @id @default(uuid())
+  email          String          @unique
+  password       String
+  name           String
+  role           Role            @default(CLIENT)
+  phone          String?
+  company        String?
+  gstNumber      String?
+  postalCode     String?
+  address        String?
+  avatarUrl      String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  plants         Plant[]
+  tickets        Ticket[]
+  ticketComments TicketComment[]
+  orders         Order[]
+  notifications  Notification[]
+  invoices       Invoice[]
+  vendorProfile  Vendor?
+}
+
+model Vendor {
+  id          String   @id
+  user        User     @relation(fields: [id], references: [id], onDelete: Cascade)
+  companyName String
+  rating      Float    @default(0.0)
+  isVerified  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  products    Product[]
+}
+
+model Plant {
+  id           String      @id @default(uuid())
+  name         String
+  location     String
+  peakCapacity Float
+  status       String
+  ownerId      String
+  owner        User        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  panels       Panel[]
+  tickets      Ticket[]
+  telemetry    Telemetry[]
+  invoices     Invoice[]
+}
+
+model Panel {
+  id          String      @id @default(uuid())
+  row         Int
+  column      Int
+  status      PanelStatus @default(HEALTHY)
+  voltage     Float
+  current     Float
+  temperature Float
+  generation  Float
+  lastSync    DateTime    @default(now())
+  plantId     String
+  plant       Plant       @relation(fields: [plantId], references: [id], onDelete: Cascade)
+  telemetry   Telemetry[]
+}
+
+model Telemetry {
+  id          String   @id @default(uuid())
+  voltage     Float
+  current     Float
+  temperature Float
+  generation  Float
+  timestamp   DateTime @default(now())
+  panelId     String
+  panel       Panel    @relation(fields: [panelId], references: [id], onDelete: Cascade)
+  plantId     String
+  plant       Plant    @relation(fields: [plantId], references: [id], onDelete: Cascade)
+
+  @@index([timestamp])
+}
+
+model Invoice {
+  id            String        @id @default(uuid())
+  invoiceNumber String        @unique
+  amount        Float
+  period        String
+  status        InvoiceStatus @default(PENDING)
+  dueDate       DateTime
+  paidAt        DateTime?
+  userId        String
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plantId       String?
+  plant         Plant?        @relation(fields: [plantId], references: [id], onDelete: SetNull)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+model Product {
+  id            String      @id @default(uuid())
+  title         String
+  brand         String
+  spec          String
+  rating        Float       @default(0.0)
+  reviewsCount  Int         @default(0)
+  price         Float
+  originalPrice Float?
+  isAssured     Boolean     @default(false)
+  category      String
+  stock         Int         @default(0)
+  vendorId      String
+  vendor        Vendor      @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  orderItems    OrderItem[]
+}
+
+model Order {
+  id          String      @id @default(uuid())
+  orderNumber String      @unique
+  totalAmount Float
+  status      OrderStatus @default(PENDING)
+  userId      String
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  items       OrderItem[]
+}
+
+model OrderItem {
+  id              String   @id @default(uuid())
+  orderId         String
+  order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId       String
+  product         Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  quantity        Int
+  priceAtPurchase Float
+}
+
+model Ticket {
+  id                String         @id @default(uuid())
+  ticketNumber      String         @unique
+  title             String
+  description       String
+  status            TicketStatus   @default(OPEN)
+  priority          TicketPriority @default(MEDIUM)
+  lastUpdateMessage String?
+  userId            String
+  user              User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plantId           String
+  plant             Plant          @relation(fields: [plantId], references: [id], onDelete: Cascade)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  comments          TicketComment[]
+}
+
+model TicketComment {
+  id        String   @id @default(uuid())
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  message   String
+  createdAt DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}

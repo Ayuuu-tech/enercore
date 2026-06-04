@@ -82,7 +82,10 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: '/ticket-detail',
-      builder: (context, state) => const TicketsDetailScreen(),
+      builder: (context, state) {
+        final ticketId = state.uri.queryParameters['id'] ?? '';
+        return TicketsDetailScreen(ticketId: ticketId);
+      },
     ),
     GoRoute(
       path: '/billing',

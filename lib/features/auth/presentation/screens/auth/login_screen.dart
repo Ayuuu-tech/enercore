@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../application/auth_controller.dart';
+import '../../../data/auth_repository.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   final String role;
@@ -25,7 +26,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
 
   // Brand teal colour matching the photo
   static const _teal = Color(0xFF2A8C6E);
-  static const _tealLight = Color(0xFFE8F5F1);
 
   @override
   void initState() {
@@ -50,15 +50,95 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   }
 
   Future<void> _login() async {
-    if (_formKey.currentState!.validate()) {
+    if (!_formKey.currentState!.validate()) return;
+    try {
       await ref.read(authControllerProvider.notifier).login(
             _emailController.text.trim(),
             _passwordController.text,
           );
-      if (mounted && ref.read(authControllerProvider).value != null) {
-        context.go(_isVendor ? '/vendor-dashboard' : '/client-dashboard');
+    } catch (e) {
+      if (mounted) _showError(e.toString().replaceAll('Exception: ', '').replaceAll('Exception:', ''));
+      return;
+    }
+    final user = ref.read(authControllerProvider).value;
+    if (mounted && user != null) {
+      if (user.role.toUpperCase() == 'ADMIN') {
+        context.go('/admin-dashboard');
+      } else if (user.role.toUpperCase() == 'VENDOR') {
+        context.go('/vendor-dashboard');
+      } else {
+        context.go('/client-dashboard');
       }
     }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _showServerSettings(BuildContext context) {
+    final controller = TextEditingController(
+      text: HttpAuthRepository.customUrl ?? 'http://localhost:3000/api',
+    );
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Server Configuration', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Enter Backend API base URL:',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: controller,
+              decoration: InputDecoration(
+                hintText: 'http://192.168.1.XX:3000/api',
+                hintStyle: const TextStyle(fontSize: 12),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              ),
+              style: const TextStyle(fontSize: 13),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2A8C6E),
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              setState(() {
+                HttpAuthRepository.customUrl = controller.text.trim();
+              });
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Server URL set to: ${HttpAuthRepository.customUrl}'),
+                  backgroundColor: const Color(0xFF2A8C6E),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -84,18 +164,36 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                       'assets/images/logo.png',
                       height: 28,
                     ),
-                    // Help button
-                    Container(
-                      width: 30,
-                      height: 30,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade100,
-                        shape: BoxShape.circle,
-                        border:
-                            Border.all(color: Colors.grey.shade300),
-                      ),
-                      child: const Icon(Icons.help_outline,
-                          color: Colors.grey, size: 17),
+                    // Server Settings + Help button
+                    Row(
+                      children: [
+                        GestureDetector(
+                          onTap: () => _showServerSettings(context),
+                          child: Container(
+                            width: 30,
+                            height: 30,
+                            margin: const EdgeInsets.only(right: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade100,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.grey.shade300),
+                            ),
+                            child: const Icon(Icons.settings_outlined,
+                                color: Colors.grey, size: 17),
+                          ),
+                        ),
+                        Container(
+                          width: 30,
+                          height: 30,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.grey.shade300),
+                          ),
+                          child: const Icon(Icons.help_outline,
+                              color: Colors.grey, size: 17),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -147,9 +245,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                               // Email label
                               _label('Email Address'),
                               const SizedBox(height: 8),
+                              AutofillGroup(
+                                child: Column(
+                                  children: [
                               TextFormField(
                                 controller: _emailController,
                                 keyboardType: TextInputType.emailAddress,
+                                autofillHints: const [AutofillHints.email],
+                                textInputAction: TextInputAction.next,
                                 style: TextStyle(
                                     color: Colors.grey.shade800,
                                     fontSize: 14),
@@ -188,6 +291,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                               TextFormField(
                                 controller: _passwordController,
                                 obscureText: _obscurePassword,
+                                autofillHints: const [AutofillHints.password],
+                                textInputAction: TextInputAction.done,
                                 style: TextStyle(
                                     color: Colors.grey.shade800,
                                     fontSize: 14),
@@ -212,6 +317,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                     v == null || v.isEmpty
                                         ? 'Required'
                                         : null,
+                              ),
+                                  ],
+                                ),
                               ),
                             ],
                           ),

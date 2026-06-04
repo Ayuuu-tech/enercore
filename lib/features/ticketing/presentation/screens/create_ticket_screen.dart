@@ -1,17 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../application/ticketing_controller.dart';
+import '../../data/plants_repository.dart';
+import '../../domain/plant_model.dart';
 
-class CreateTicketScreen extends StatefulWidget {
+class CreateTicketScreen extends ConsumerStatefulWidget {
   const CreateTicketScreen({super.key});
 
   @override
-  State<CreateTicketScreen> createState() => _CreateTicketScreenState();
+  ConsumerState<CreateTicketScreen> createState() => _CreateTicketScreenState();
 }
 
-class _CreateTicketScreenState extends State<CreateTicketScreen> {
-  int _selectedPriority = 0; // Low priority selected by default
-  String _selectedPlant = 'Select a facility';
+class _CreateTicketScreenState extends ConsumerState<CreateTicketScreen> {
+  int _selectedPriority = 1; // Medium priority selected by default
+  String? _selectedPlantId;
   String _selectedCategory = 'Fault';
+
+  final _subjectController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  bool _isSubmitting = false;
 
   // Premium Design System
   static const _bg = Color(0xFFF4F6F8);
@@ -22,7 +30,16 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   static const _slateLight = Color(0xFF64748B);
 
   @override
+  void dispose() {
+    _subjectController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final plantsState = ref.watch(plantsFutureProvider);
+
     return Scaffold(
       backgroundColor: _bg,
       body: SafeArea(
@@ -57,7 +74,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                         ),
                       ),
                       const SizedBox(height: 20),
-                      _inputForm(),
+                      _inputForm(plantsState),
                       const SizedBox(height: 16),
                       _infoCardsList(),
                       const SizedBox(height: 16),
@@ -123,7 +140,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   }
 
   // ── Form Card ──────────────────────────────────────────────────────────────
-  Widget _inputForm() {
+  Widget _inputForm(AsyncValue<List<PlantModel>> plantsState) {
     return _card_(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -131,14 +148,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
           // Plant Selector
           _fieldLabel('PLANT SELECTOR'),
           const SizedBox(height: 6),
-          _dropdownField(
-            icon: Icons.apartment_rounded,
-            value: _selectedPlant,
-            items: ['Select a facility', 'Plant Alpha – Pune', 'Plant Beta – Mumbai'],
-            onChanged: (val) {
-              if (val != null) setState(() => _selectedPlant = val);
-            },
-          ),
+          _plantDropdownField(plantsState),
           const SizedBox(height: 16),
 
           // Issue Category
@@ -157,13 +167,13 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
           // Subject
           _fieldLabel('SUBJECT'),
           const SizedBox(height: 6),
-          _textField(hint: 'Brief summary of the issue'),
+          _textField(hint: 'Brief summary of the issue', controller: _subjectController),
           const SizedBox(height: 16),
 
           // Description
           _fieldLabel('DESCRIPTION'),
           const SizedBox(height: 6),
-          _textField(hint: 'Please provide detailed technical logs or observation notes...', isMultiline: true),
+          _textField(hint: 'Please provide detailed technical logs or observation notes...', controller: _descriptionController, isMultiline: true),
           const SizedBox(height: 16),
 
           // Priority Level
@@ -200,11 +210,17 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                 elevation: 0,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
-              onPressed: () => context.pop(),
-              icon: const Icon(Icons.send_rounded, size: 16),
-              label: const Text(
-                'Submit Ticket',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+              onPressed: _isSubmitting ? null : _submitTicket,
+              icon: _isSubmitting
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.send_rounded, size: 16),
+              label: Text(
+                _isSubmitting ? 'Submitting...' : 'Submit Ticket',
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
               ),
             ),
           ),
@@ -217,6 +233,88 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
     return Text(
       label,
       style: const TextStyle(color: _slateLight, fontSize: 9, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+    );
+  }
+
+  Widget _plantDropdownField(AsyncValue<List<PlantModel>> plantsState) {
+    return plantsState.when(
+      data: (plants) {
+        if (plants.isEmpty) {
+          return Container(
+            height: 44,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            alignment: Alignment.centerLeft,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: _cardBorder, width: 1),
+            ),
+            child: const Text('No facilities available', style: TextStyle(color: _slateLight, fontSize: 12)),
+          );
+        }
+        
+        if (_selectedPlantId == null || !plants.any((p) => p.id == _selectedPlantId)) {
+          _selectedPlantId = plants.first.id;
+        }
+
+        return Container(
+          height: 44,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: _cardBorder, width: 1),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.apartment_rounded, color: _slateLight, size: 18),
+              const SizedBox(width: 10),
+              Expanded(
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _selectedPlantId,
+                    icon: const Icon(Icons.keyboard_arrow_down_rounded, color: _slateLight, size: 18),
+                    style: const TextStyle(color: _slateDark, fontSize: 12, fontWeight: FontWeight.w600),
+                    onChanged: (val) {
+                      if (val != null) setState(() => _selectedPlantId = val);
+                    },
+                    items: plants.map((p) => DropdownMenuItem(
+                      value: p.id,
+                      child: Text('${p.name} – ${p.location.split(',')[0]}'),
+                    )).toList(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+      loading: () => Container(
+        height: 44,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: _cardBorder, width: 1),
+        ),
+        child: const SizedBox(
+          width: 16,
+          height: 16,
+          child: CircularProgressIndicator(strokeWidth: 2, color: _teal),
+        ),
+      ),
+      error: (err, stack) => Container(
+        height: 44,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        alignment: Alignment.centerLeft,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.redAccent.withAlpha((0.1 * 255).toInt()), width: 1),
+        ),
+        child: Text('Error loading facilities: $err', style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
+      ),
     );
   }
 
@@ -249,7 +347,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
     );
   }
 
-  Widget _textField({required String hint, bool isMultiline = false}) {
+  Widget _textField({required String hint, required TextEditingController controller, bool isMultiline = false}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
@@ -258,7 +356,9 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
         border: Border.all(color: _cardBorder, width: 1),
       ),
       child: TextField(
+        controller: controller,
         maxLines: isMultiline ? 4 : 1,
+        style: const TextStyle(color: _slateDark, fontSize: 12, fontWeight: FontWeight.w600),
         decoration: InputDecoration(
           hintText: hint,
           hintStyle: const TextStyle(color: _slateLight, fontSize: 12, fontWeight: FontWeight.w500),
@@ -311,11 +411,11 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _teal.withValues(alpha: 0.3), width: 1.5, style: BorderStyle.none), // We can mimic dashed borders using a simple custom painter if needed, but a soft tinted card border is also extremely clean! Let's make a crisp container.
+        border: Border.all(color: _cardBorder, width: 1),
       ),
       child: Container(
         decoration: BoxDecoration(
-          border: Border.all(color: _slateLight.withValues(alpha: 0.2), width: 1),
+          border: Border.all(color: _slateLight.withAlpha((0.2 * 255).toInt()), width: 1),
           borderRadius: BorderRadius.circular(8),
         ),
         padding: const EdgeInsets.all(12),
@@ -373,7 +473,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
           decoration: BoxDecoration(
             color: item.$4,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: _cardBorder.withValues(alpha: 0.5), width: 0.8),
+            border: Border.all(color: _cardBorder.withAlpha((0.5 * 255).toInt()), width: 0.8),
           ),
           child: Row(
             children: [
@@ -402,6 +502,72 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
     );
   }
 
+  // ── Submit Ticket Function ──────────────────────────────────────────────────
+  Future<void> _submitTicket() async {
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    
+    if (_selectedPlantId == null) {
+      scaffoldMessenger.showSnackBar(
+        const SnackBar(content: Text('Please select a facility.'), behavior: SnackBarBehavior.floating),
+      );
+      return;
+    }
+    
+    final subject = _subjectController.text.trim();
+    if (subject.isEmpty) {
+      scaffoldMessenger.showSnackBar(
+        const SnackBar(content: Text('Please enter a ticket subject.'), behavior: SnackBarBehavior.floating),
+      );
+      return;
+    }
+
+    final description = _descriptionController.text.trim();
+    if (description.isEmpty) {
+      scaffoldMessenger.showSnackBar(
+        const SnackBar(content: Text('Please enter an issue description.'), behavior: SnackBarBehavior.floating),
+      );
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+
+    try {
+      final priorityStr = _selectedPriority == 0 ? 'LOW' : (_selectedPriority == 1 ? 'MEDIUM' : 'HIGH');
+      final finalTitle = '[$_selectedCategory] $subject';
+
+      await ref.read(ticketingControllerProvider.notifier).createTicket(
+        title: finalTitle,
+        description: description,
+        plantId: _selectedPlantId!,
+        priority: priorityStr,
+      );
+
+      scaffoldMessenger.showSnackBar(
+        const SnackBar(
+          content: Text('Ticket created successfully!'),
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+
+      if (mounted) {
+        context.pop(true); // Return true to signal that list needs refreshing
+      }
+    } catch (e) {
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text('Failed to submit ticket: $e'),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
+  }
+
   // ── Card Helper ────────────────────────────────────────────────────────────
   Widget _card_({required Widget child}) {
     return Container(
@@ -413,7 +579,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
         border: Border.all(color: _cardBorder, width: 1),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
+            color: Colors.black.withAlpha((0.03 * 255).toInt()),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),

@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
 import 'package:enercore_app/features/auth/domain/user_model.dart';
 import 'package:enercore_app/features/auth/data/auth_repository.dart';
 
@@ -20,6 +22,7 @@ class AuthController extends AsyncNotifier<UserModel?> {
       state = AsyncValue.data(user);
     } catch (e, stackTrace) {
       state = AsyncValue.error(e, stackTrace);
+      rethrow;
     }
   }
 
@@ -28,5 +31,25 @@ class AuthController extends AsyncNotifier<UserModel?> {
     final authRepository = ref.read(authRepositoryProvider);
     await authRepository.logout();
     state = const AsyncValue.data(null);
+  }
+
+  Future<void> refreshProfile() async {
+    try {
+      final repo = ref.read(authRepositoryProvider) as HttpAuthRepository;
+      final response = await http.get(
+        Uri.parse('${repo.baseUrl}/users/me'),
+        headers: {
+          'Content-Type': 'application/json',
+          if (HttpAuthRepository.token != null)
+            'Authorization': 'Bearer ${HttpAuthRepository.token}',
+        },
+      );
+      if (response.statusCode == 200) {
+        final user = UserModel.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+        state = AsyncValue.data(user);
+      }
+    } catch (e, stackTrace) {
+      state = AsyncValue.error(e, stackTrace);
+    }
   }
 }

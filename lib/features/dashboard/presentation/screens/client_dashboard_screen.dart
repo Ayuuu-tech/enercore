@@ -1,15 +1,17 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../auth/application/auth_controller.dart';
 
-class ClientDashboardScreen extends StatefulWidget {
+class ClientDashboardScreen extends ConsumerStatefulWidget {
   const ClientDashboardScreen({super.key});
 
   @override
-  State<ClientDashboardScreen> createState() => _ClientDashboardScreenState();
+  ConsumerState<ClientDashboardScreen> createState() => _ClientDashboardScreenState();
 }
 
-class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
+class _ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
   int _selectedTimeFilter = 0;
   int _selectedNav = 0;
 
@@ -18,7 +20,6 @@ class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
   static const _card = Colors.white;
   static const _cardBorder = Color(0xFFE5E7EB);
   static const _teal = Color(0xFF2A8C6E); // primary brand green-teal
-  static const _amber = Color(0xFFF5A623);
   static const _headerBg = Colors.white;
   static const _slateDark = Color(0xFF1E293B);
   static const _slateLight = Color(0xFF64748B);
@@ -50,9 +51,9 @@ class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
                             children: [
                               Row(
                                 children: [
-                                  const Text(
-                                    'Good morning, Rajesh ',
-                                    style: TextStyle(
+                                  Text(
+                                    'Good morning, ${ref.watch(authControllerProvider).value?.name ?? 'User'} ',
+                                    style: const TextStyle(
                                       color: _slateDark,
                                       fontSize: 16,
                                       fontWeight: FontWeight.w700,

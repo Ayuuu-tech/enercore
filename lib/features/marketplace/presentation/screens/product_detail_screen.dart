@@ -10,7 +10,7 @@ class ProductDetailScreen extends StatefulWidget {
 
 class _ProductDetailScreenState extends State<ProductDetailScreen> {
   int _quantity = 1;
-  int _selectedNav = -1; // Sub-marketplace navigation
+  final int _selectedNav = -1; // Sub-marketplace navigation
   int _selectedThumb = 0;
 
   // Premium Design System
@@ -700,11 +700,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           final active = _selectedNav == i;
           return GestureDetector(
             onTap: () {
-              if (routes[i] != null) {
-                context.push(routes[i]!);
-              } else {
-                setState(() => _selectedNav = i);
-              }
+              context.push(routes[i]);
             },
             child: Container(
               color: Colors.transparent,

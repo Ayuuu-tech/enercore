@@ -1,27 +1,49 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../application/ticketing_controller.dart';
+import '../../data/plants_repository.dart';
 
-class TicketsListScreen extends StatefulWidget {
+class TicketsListScreen extends ConsumerStatefulWidget {
   const TicketsListScreen({super.key});
 
   @override
-  State<TicketsListScreen> createState() => _TicketsListScreenState();
+  ConsumerState<TicketsListScreen> createState() => _TicketsListScreenState();
 }
 
-class _TicketsListScreenState extends State<TicketsListScreen> {
+class _TicketsListScreenState extends ConsumerState<TicketsListScreen> {
   int _selectedNav = 4; // Tickets tab active
   int _selectedFilter = 0; // "All" tab active
 
   // Premium Design System
   static const _bg = Color(0xFFF4F6F8);
-  static const _card = Colors.white;
   static const _cardBorder = Color(0xFFE5E7EB);
   static const _teal = Color(0xFF2A8C6E); // primary brand green-teal
   static const _slateDark = Color(0xFF1E293B);
   static const _slateLight = Color(0xFF64748B);
 
+  String _formatRelativeTime(DateTime dateTime) {
+    final diff = DateTime.now().difference(dateTime);
+    if (diff.inDays > 365) {
+      return '${(diff.inDays / 365).floor()} years ago';
+    } else if (diff.inDays > 30) {
+      return '${(diff.inDays / 30).floor()} months ago';
+    } else if (diff.inDays > 0) {
+      return '${diff.inDays} days ago';
+    } else if (diff.inHours > 0) {
+      return '${diff.inHours} hours ago';
+    } else if (diff.inMinutes > 0) {
+      return '${diff.inMinutes} minutes ago';
+    } else {
+      return 'Just now';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final ticketsState = ref.watch(ticketingControllerProvider);
+    final plantsState = ref.watch(plantsFutureProvider);
+
     return Scaffold(
       backgroundColor: _bg,
       body: SafeArea(
@@ -29,65 +51,174 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
           children: [
             _topBar(),
             Expanded(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
+              child: ticketsState.when(
+                data: (tickets) {
+                  return plantsState.when(
+                    data: (plants) {
+                      final plantsMap = {for (var p in plants) p.id: p};
+                      
+                      // Filter tickets
+                      final filteredTickets = tickets.where((ticket) {
+                        if (_selectedFilter == 0) return true; // All
+                        if (_selectedFilter == 1) return ticket.status.toUpperCase() == 'OPEN';
+                        if (_selectedFilter == 2) return ticket.status.toUpperCase() == 'IN_PROGRESS';
+                        if (_selectedFilter == 3) return ticket.status.toUpperCase() == 'RESOLVED';
+                        return true;
+                      }).toList();
+
+                      return RefreshIndicator(
+                        onRefresh: () => ref.read(ticketingControllerProvider.notifier).fetchTickets(),
+                        color: _teal,
+                        child: SingleChildScrollView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'My Support Tickets',
+                                  style: TextStyle(
+                                    color: _slateDark,
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: -0.5,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                const Text(
+                                  'Monitor and manage your industrial energy asset service requests and technical inquiries.',
+                                  style: TextStyle(
+                                    color: _slateLight,
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w500,
+                                    height: 1.4,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                _raiseTicketButton(),
+                                const SizedBox(height: 20),
+                                _filterTabs(),
+                                const SizedBox(height: 16),
+                                if (filteredTickets.isEmpty)
+                                  Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.symmetric(vertical: 40),
+                                    alignment: Alignment.center,
+                                    child: const Text(
+                                      'No tickets found.',
+                                      style: TextStyle(color: _slateLight, fontSize: 13, fontWeight: FontWeight.w500),
+                                    ),
+                                  )
+                                else
+                                  ListView.separated(
+                                    shrinkWrap: true,
+                                    physics: const NeverScrollableScrollPhysics(),
+                                    itemCount: filteredTickets.length,
+                                    separatorBuilder: (context, index) => const SizedBox(height: 12),
+                                    itemBuilder: (context, index) {
+                                      final ticket = filteredTickets[index];
+                                      final plant = plantsMap[ticket.plantId];
+                                      final plantName = plant != null ? '${plant.name} – ${plant.location.split(',')[0]}' : 'Facility';
+                                      
+                                      // Status mapping
+                                      Color statusColor;
+                                      Color statusBg;
+                                      String statusLabel;
+                                      switch (ticket.status.toUpperCase()) {
+                                        case 'OPEN':
+                                          statusColor = _teal;
+                                          statusBg = const Color(0xFFD1FAE5);
+                                          statusLabel = 'Open';
+                                          break;
+                                        case 'IN_PROGRESS':
+                                          statusColor = const Color(0xFFD97706);
+                                          statusBg = const Color(0xFFFEF3C7);
+                                          statusLabel = 'In Progress';
+                                          break;
+                                        case 'RESOLVED':
+                                          statusColor = _slateLight;
+                                          statusBg = const Color(0xFFF1F5F9);
+                                          statusLabel = 'Resolved';
+                                          break;
+                                        default:
+                                          statusColor = _slateLight;
+                                          statusBg = const Color(0xFFF1F5F9);
+                                          statusLabel = ticket.status;
+                                      }
+
+                                      // Priority mapping
+                                      Color priorityColor;
+                                      String priorityLabel;
+                                      switch (ticket.priority.toUpperCase()) {
+                                        case 'LOW':
+                                          priorityColor = const Color(0xFF10B981);
+                                          priorityLabel = 'Low Priority';
+                                          break;
+                                        case 'MEDIUM':
+                                          priorityColor = const Color(0xFFD97706);
+                                          priorityLabel = 'Medium Priority';
+                                          break;
+                                        case 'HIGH':
+                                          priorityColor = const Color(0xFFEF4444);
+                                          priorityLabel = 'High Priority';
+                                          break;
+                                        default:
+                                          priorityColor = _slateLight;
+                                          priorityLabel = '${ticket.priority} Priority';
+                                      }
+
+                                      return _ticketCard(
+                                        actualId: ticket.id,
+                                        id: ticket.ticketNumber.contains('-') ? '#${ticket.ticketNumber.split('-')[0]}' : '#${ticket.ticketNumber}',
+                                        plant: plantName,
+                                        status: statusLabel,
+                                        statusColor: statusColor,
+                                        statusBg: statusBg,
+                                        priority: priorityLabel,
+                                        priorityColor: priorityColor,
+                                        title: ticket.title,
+                                        lastUpdate: ticket.lastUpdateMessage ?? 'Ticket raised successfully.',
+                                        created: _formatRelativeTime(ticket.createdAt),
+                                      );
+                                    },
+                                  ),
+                                const SizedBox(height: 16),
+                                _promoCard(),
+                                const SizedBox(height: 12),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                    loading: () => const Center(
+                      child: CircularProgressIndicator(color: _teal),
+                    ),
+                    error: (err, stack) => Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text('Error loading facilities: $err', style: const TextStyle(color: Colors.redAccent)),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+                loading: () => const Center(
+                  child: CircularProgressIndicator(color: _teal),
+                ),
+                error: (err, stack) => Center(
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Text(
-                        'My Support Tickets',
-                        style: TextStyle(
-                          color: _slateDark,
-                          fontSize: 24,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      const Text(
-                        'Monitor and manage your industrial energy asset service requests and technical inquiries.',
-                        style: TextStyle(
-                          color: _slateLight,
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w500,
-                          height: 1.4,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      _raiseTicketButton(),
-                      const SizedBox(height: 20),
-                      _filterTabs(),
-                      const SizedBox(height: 16),
-                      _ticketCard(
-                        id: '#TKT-1042',
-                        plant: 'Plant Alpha – Pune',
-                        status: 'In Progress',
-                        statusColor: const Color(0xFFD97706),
-                        statusBg: const Color(0xFFFEF3C7),
-                        priority: 'High Priority',
-                        priorityColor: const Color(0xFFEF4444),
-                        title: 'Inverter Efficiency Drop',
-                        lastUpdate: 'Technical team is investigating the voltage surge',
-                        created: '2 days ago',
-                      ),
+                      Text('Error: $err', style: const TextStyle(color: Colors.redAccent)),
                       const SizedBox(height: 12),
-                      _ticketCard(
-                        id: '#TKT-1020',
-                        plant: 'Plant Beta – Mumbai',
-                        status: 'Open',
-                        statusColor: _teal,
-                        statusBg: const Color(0xFFD1FAE5),
-                        priority: 'Medium Priority',
-                        priorityColor: const Color(0xFFD97706),
-                        title: 'Billing Discrepancy Q3',
-                        lastUpdate: 'Ticket assigned to finance department.',
-                        created: '5 hours ago',
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(backgroundColor: _teal),
+                        onPressed: () => ref.read(ticketingControllerProvider.notifier).fetchTickets(),
+                        child: const Text('Retry', style: TextStyle(color: Colors.white)),
                       ),
-                      const SizedBox(height: 16),
-                      _promoCard(),
-                      const SizedBox(height: 12),
                     ],
                   ),
                 ),
@@ -162,7 +293,12 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
           elevation: 0,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
-        onPressed: () => context.push('/create-ticket'),
+        onPressed: () async {
+          final result = await context.push('/create-ticket');
+          if (result == true) {
+            ref.read(ticketingControllerProvider.notifier).fetchTickets();
+          }
+        },
         icon: const Icon(Icons.add_rounded, size: 18),
         label: const Text(
           'Raise New Ticket',
@@ -209,6 +345,7 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
 
   // ── Ticket Card Component ──────────────────────────────────────────────────
   Widget _ticketCard({
+    required String actualId,
     required String id,
     required String plant,
     required String status,
@@ -221,7 +358,7 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
     required String created,
   }) {
     return GestureDetector(
-      onTap: () => context.push('/ticket-detail'),
+      onTap: () => context.push('/ticket-detail?id=$actualId'),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -230,7 +367,7 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
           border: Border.all(color: _cardBorder, width: 1),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
+              color: Colors.black.withAlpha((0.03 * 255).toInt()),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -302,7 +439,7 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
                     const SizedBox(width: 4),
                     Text(
                       priority,
-                      style: TextStyle(
+                      style: const TextStyle(
                         color: _slateLight,
                         fontSize: 10,
                         fontWeight: FontWeight.w700,
@@ -470,14 +607,14 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
                 children: [
                   Icon(
                     items[i].$1,
-                    color: active ? _teal : _slateLight.withValues(alpha: 0.6),
+                    color: active ? _teal : _slateLight.withAlpha((0.6 * 255).toInt()),
                     size: 20,
                   ),
                   const SizedBox(height: 4),
                   Text(
                     items[i].$2,
                     style: TextStyle(
-                      color: active ? _teal : _slateLight.withValues(alpha: 0.7),
+                      color: active ? _teal : _slateLight.withAlpha((0.7 * 255).toInt()),
                       fontSize: 9,
                       fontWeight: active ? FontWeight.w700 : FontWeight.w500,
                     ),

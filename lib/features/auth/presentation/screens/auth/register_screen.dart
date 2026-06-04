@@ -1,20 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../data/auth_repository.dart';
 
-class RegisterScreen extends StatefulWidget {
+class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
 
   @override
-  State<RegisterScreen> createState() => _RegisterScreenState();
+  ConsumerState<RegisterScreen> createState() => _RegisterScreenState();
 }
 
-class _RegisterScreenState extends State<RegisterScreen>
+class _RegisterScreenState extends ConsumerState<RegisterScreen>
     with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   final _orgController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+  bool _obscurePassword = true;
+  bool _obscureConfirm = true;
   String _selectedRole = 'user';
   bool _loading = false;
   bool _submitted = false;
@@ -45,18 +51,48 @@ class _RegisterScreenState extends State<RegisterScreen>
     _emailController.dispose();
     _phoneController.dispose();
     _orgController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
     _animController.dispose();
     super.dispose();
   }
 
   Future<void> _submit() async {
-    if (_formKey.currentState!.validate()) {
-      setState(() => _loading = true);
-      await Future.delayed(const Duration(seconds: 1));
+    if (!_formKey.currentState!.validate()) return;
+    if (_passwordController.text.length < 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Password must be at least 6 characters'), backgroundColor: Colors.redAccent),
+      );
+      return;
+    }
+    if (_passwordController.text != _confirmPasswordController.text) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Passwords do not match'), backgroundColor: Colors.redAccent),
+      );
+      return;
+    }
+    setState(() => _loading = true);
+    try {
+      await ref.read(authRepositoryProvider).register(
+        _emailController.text.trim(),
+        _passwordController.text,
+        _nameController.text.trim(),
+        _selectedRole == 'user' ? 'CLIENT' : 'VENDOR',
+      );
       setState(() {
         _loading = false;
         _submitted = true;
       });
+    } catch (e) {
+      setState(() => _loading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceAll('Exception:', '')),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
     }
   }
 
@@ -278,6 +314,42 @@ class _RegisterScreenState extends State<RegisterScreen>
                 validator: (v) =>
                     v == null || v.isEmpty ? 'Required' : null,
               ),
+              const SizedBox(height: 18),
+
+              _label('Password'),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _passwordController,
+                obscureText: _obscurePassword,
+                style: TextStyle(color: Colors.grey.shade800, fontSize: 14),
+                decoration: _inputDeco(
+                  hint: 'Min 6 characters',
+                  icon: Icons.lock_outline,
+                  suffix: IconButton(
+                    icon: Icon(_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined, size: 20, color: Colors.grey.shade400),
+                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                  ),
+                ),
+                validator: (v) => v == null || v.isEmpty ? 'Required' : (v.length < 6 ? 'Min 6 characters' : null),
+              ),
+              const SizedBox(height: 18),
+
+              _label('Confirm Password'),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _confirmPasswordController,
+                obscureText: _obscureConfirm,
+                style: TextStyle(color: Colors.grey.shade800, fontSize: 14),
+                decoration: _inputDeco(
+                  hint: 'Re-enter password',
+                  icon: Icons.lock_outline,
+                  suffix: IconButton(
+                    icon: Icon(_obscureConfirm ? Icons.visibility_outlined : Icons.visibility_off_outlined, size: 20, color: Colors.grey.shade400),
+                    onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                  ),
+                ),
+                validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+              ),
             ],
           ),
         ),
@@ -377,11 +449,12 @@ class _RegisterScreenState extends State<RegisterScreen>
       );
 
   InputDecoration _inputDeco(
-      {required String hint, required IconData icon}) {
+      {required String hint, required IconData icon, Widget? suffix}) {
     return InputDecoration(
       hintText: hint,
       hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
       prefixIcon: Icon(icon, color: Colors.grey.shade400, size: 20),
+      suffixIcon: suffix,
       filled: true,
       fillColor: Colors.grey.shade50,
       contentPadding:
