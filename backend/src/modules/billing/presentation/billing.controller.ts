@@ -5,6 +5,7 @@ import {
   Get,
   Param,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { BillingService } from '../application/billing.service';
@@ -22,11 +23,18 @@ export class BillingController {
   constructor(private readonly billingService: BillingService) {}
 
   @Get()
-  async findAll(@CurrentUser() user: UserEntity) {
+  async findAll(
+    @CurrentUser() user: UserEntity,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const pageNum = Math.max(1, parseInt(page ?? '1', 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit ?? '100', 10) || 100));
+
     if (user.role === Role.ADMIN) {
-      return this.billingService.findAll();
+      return this.billingService.findAll(pageNum, limitNum);
     }
-    return this.billingService.findAllByUser(user.id);
+    return this.billingService.findAllByUser(user.id, pageNum, limitNum);
   }
 
   @Get(':id')

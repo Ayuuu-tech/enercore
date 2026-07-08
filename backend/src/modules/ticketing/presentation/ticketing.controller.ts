@@ -7,6 +7,7 @@ import {
   Param,
   Post,
   Put,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { TicketingService } from '../application/ticketing.service';
@@ -23,11 +24,18 @@ export class TicketingController {
   constructor(private readonly ticketingService: TicketingService) {}
 
   @Get()
-  async findAll(@CurrentUser() user: UserEntity) {
+  async findAll(
+    @CurrentUser() user: UserEntity,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const pageNum = Math.max(1, parseInt(page ?? '1', 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit ?? '20', 10) || 20));
+
     if (user.role === Role.ADMIN) {
-      return this.ticketingService.findAll();
+      return this.ticketingService.findAll(pageNum, limitNum);
     }
-    return this.ticketingService.findAllByUser(user.id);
+    return this.ticketingService.findAllByUser(user.id, pageNum, limitNum);
   }
 
   @Get(':id')

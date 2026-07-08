@@ -1,3 +1,5 @@
+import 'dart:io' show SocketException;
+import 'package:http/http.dart' show ClientException;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -57,19 +59,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
             _passwordController.text,
           );
     } catch (e) {
-      if (mounted) _showError(e.toString().replaceAll('Exception: ', '').replaceAll('Exception:', ''));
+      if (mounted) {
+        if (e is SocketException || e is ClientException) {
+          _showError('Cannot reach backend.\n\n1. STOP the app and run again (flutter run) — NOT hot reload\n2. Still failing? Tap ⚙ gear, enter your PC\'s LAN IP (e.g. http://192.168.x.x:3000/api), then Save.');
+        } else {
+          final msg = e.toString().replaceAll('Exception: ', '').replaceAll('Exception:', '');
+          _showError(msg.isNotEmpty ? msg : 'Unable to sign in. Check your credentials and server connection.');
+        }
+      }
       return;
     }
-    final user = ref.read(authControllerProvider).value;
-    if (mounted && user != null) {
-      if (user.role.toUpperCase() == 'ADMIN') {
-        context.go('/admin-dashboard');
-      } else if (user.role.toUpperCase() == 'VENDOR') {
-        context.go('/vendor-dashboard');
-      } else {
-        context.go('/client-dashboard');
-      }
-    }
+    // Navigation is handled centrally by the router's redirect (which reacts to
+    // the auth state change). Navigating manually here as well caused a
+    // double-navigation that rebuilt the whole app on login.
   }
 
   void _showError(String message) {

@@ -5,7 +5,8 @@ import { AppService } from './app.service';
 
 // Import Feature Modules
 import { PrismaModule } from './common/prisma/prisma.module';
-import { SupabaseModule } from './common/supabase/supabase.module';
+import { PlantAccessModule } from './common/access/plant-access.module';
+import { AuditModule } from './common/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { PlantsModule } from './modules/plants/plants.module';
@@ -22,7 +23,8 @@ import { AdminModule } from './modules/admin/admin.module';
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
-    SupabaseModule,
+    PlantAccessModule,
+    AuditModule,
     AuthModule,
     UsersModule,
     PlantsModule,

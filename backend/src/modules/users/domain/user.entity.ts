@@ -6,6 +6,8 @@ export class UserEntity {
   password?: string;
   name: string;
   role: Role;
+  isActive?: boolean;
+  modules?: string[];
   phone?: string | null;
   company?: string | null;
   gstNumber?: string | null;

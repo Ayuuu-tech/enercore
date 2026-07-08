@@ -2,11 +2,13 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   UnauthorizedException,
   NotFoundException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import { v4 as uuid } from 'uuid';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { RegisterDto } from '../presentation/dto/register.dto';
 import { LoginDto } from '../presentation/dto/login.dto';
@@ -15,6 +17,8 @@ import { Role } from '@prisma/client';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
@@ -44,6 +48,7 @@ export class AuthService {
           password: hashedPassword,
           name: dto.name,
           role: dto.role,
+          phone: dto.phone,
         },
       });
 
@@ -72,24 +77,26 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
-    console.log(`[AuthService] Login attempt for email: "${dto.email}"`);
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email },
       include: { vendorProfile: true },
     });
 
+    // Use the same error for missing user / wrong password so we don't leak
+    // which emails exist, and don't log credentials or attempted emails.
     if (!user) {
-      console.warn(`[AuthService] Login failed: User with email "${dto.email}" not found.`);
       throw new UnauthorizedException('Invalid credentials');
     }
 
     const passwordMatch = await bcrypt.compare(dto.password, user.password);
     if (!passwordMatch) {
-      console.warn(`[AuthService] Login failed: Password mismatch for email "${dto.email}". (Supplied: "${dto.password}")`);
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    console.log(`[AuthService] Login successful for email: "${dto.email}"`);
+    if (!user.isActive) {
+      throw new UnauthorizedException('Your account has been disabled. Contact the administrator.');
+    }
+
     const payload = { sub: user.id, email: user.email, role: user.role };
     return {
       user: {
@@ -97,6 +104,7 @@ export class AuthService {
         email: user.email,
         name: user.name,
         role: user.role,
+        modules: user.modules,
         phone: user.phone,
         company: user.company,
         gstNumber: user.gstNumber,
@@ -127,6 +135,27 @@ export class AuthService {
     });
 
     return { message: 'Password changed successfully' };
+  }
+
+  private readonly resetTokens = new Map<string, { token: string; expiresAt: Date }>();
+
+  async forgotPassword(email: string) {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      return { message: 'If an account with that email exists, a reset link has been sent.' };
+    }
+
+    const token = uuid();
+    this.resetTokens.set(token, {
+      token,
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
+    });
+
+    // TODO: deliver this token via email. Debug-only so it never lands in
+    // production logs at the default level.
+    this.logger.debug(`Password reset token generated for a user (dev delivery only).`);
+
+    return { message: 'If an account with that email exists, a reset link has been sent.' };
   }
 
   async validateUserById(id: string) {

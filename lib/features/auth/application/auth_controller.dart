@@ -1,6 +1,4 @@
-import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:http/http.dart' as http;
 import 'package:enercore_app/features/auth/domain/user_model.dart';
 import 'package:enercore_app/features/auth/data/auth_repository.dart';
 
@@ -11,7 +9,10 @@ final authControllerProvider = AsyncNotifierProvider<AuthController, UserModel?>
 class AuthController extends AsyncNotifier<UserModel?> {
   @override
   Future<UserModel?> build() async {
-    return null;
+    // Restore a saved session on startup so the user stays logged in
+    // across app restarts.
+    final authRepository = ref.read(authRepositoryProvider);
+    return authRepository.restoreSession();
   }
 
   Future<void> login(String email, String password) async {
@@ -33,21 +34,23 @@ class AuthController extends AsyncNotifier<UserModel?> {
     state = const AsyncValue.data(null);
   }
 
+  Future<void> register(String email, String password, String name, String role, {String? phone}) async {
+    state = const AsyncValue.loading();
+    try {
+      final authRepository = ref.read(authRepositoryProvider);
+      final user = await authRepository.register(email, password, name, role, phone: phone);
+      state = AsyncValue.data(user);
+    } catch (e, stackTrace) {
+      state = AsyncValue.error(e, stackTrace);
+      rethrow;
+    }
+  }
+
   Future<void> refreshProfile() async {
     try {
-      final repo = ref.read(authRepositoryProvider) as HttpAuthRepository;
-      final response = await http.get(
-        Uri.parse('${repo.baseUrl}/users/me'),
-        headers: {
-          'Content-Type': 'application/json',
-          if (HttpAuthRepository.token != null)
-            'Authorization': 'Bearer ${HttpAuthRepository.token}',
-        },
-      );
-      if (response.statusCode == 200) {
-        final user = UserModel.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
-        state = AsyncValue.data(user);
-      }
+      final repo = ref.read(authRepositoryProvider);
+      final user = await repo.fetchProfile();
+      state = AsyncValue.data(user);
     } catch (e, stackTrace) {
       state = AsyncValue.error(e, stackTrace);
     }

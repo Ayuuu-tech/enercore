@@ -22,6 +22,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (!user) {
       throw new UnauthorizedException('User not found or invalid token');
     }
+    // Disabled accounts are rejected even if they hold a valid token.
+    if (!user.isActive) {
+      throw new UnauthorizedException('Your account has been disabled');
+    }
     // Return user to be attached to request.user
     return {
       id: user.id,

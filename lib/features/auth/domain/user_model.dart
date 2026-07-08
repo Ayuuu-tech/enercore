@@ -3,6 +3,7 @@ class UserModel {
   final String email;
   final String name;
   final String role; // CLIENT, ADMIN, VENDOR
+  final List<String> modules; // allowed modules; empty = all
   final String? phone;
   final String? company;
   final String? gstNumber;
@@ -16,6 +17,7 @@ class UserModel {
     required this.email,
     required this.name,
     required this.role,
+    this.modules = const [],
     this.phone,
     this.company,
     this.gstNumber,
@@ -25,12 +27,16 @@ class UserModel {
     this.createdAt,
   });
 
+  /// Whether the user can access a given module key. Empty list = all allowed.
+  bool canAccess(String module) => modules.isEmpty || modules.contains(module);
+
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
       id: json['id'] as String,
       email: json['email'] as String,
       name: json['name'] as String,
       role: json['role'] as String,
+      modules: (json['modules'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? const [],
       phone: json['phone'] as String?,
       company: json['company'] as String?,
       gstNumber: json['gstNumber'] as String?,
@@ -47,6 +53,7 @@ class UserModel {
       'email': email,
       'name': name,
       'role': role,
+      'modules': modules,
       'phone': phone,
       'company': company,
       'gstNumber': gstNumber,
@@ -55,33 +62,5 @@ class UserModel {
       'avatarUrl': avatarUrl,
       'createdAt': createdAt,
     };
-  }
-
-  UserModel copyWith({
-    String? id,
-    String? email,
-    String? name,
-    String? role,
-    String? phone,
-    String? company,
-    String? gstNumber,
-    String? postalCode,
-    String? address,
-    String? avatarUrl,
-    String? createdAt,
-  }) {
-    return UserModel(
-      id: id ?? this.id,
-      email: email ?? this.email,
-      name: name ?? this.name,
-      role: role ?? this.role,
-      phone: phone ?? this.phone,
-      company: company ?? this.company,
-      gstNumber: gstNumber ?? this.gstNumber,
-      postalCode: postalCode ?? this.postalCode,
-      address: address ?? this.address,
-      avatarUrl: avatarUrl ?? this.avatarUrl,
-      createdAt: createdAt ?? this.createdAt,
-    );
   }
 }

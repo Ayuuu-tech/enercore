@@ -29,16 +29,22 @@ export class PrismaInvoiceRepository implements IInvoiceRepository {
     return invoice ? this.mapToEntity(invoice) : null;
   }
 
-  async findAll(): Promise<InvoiceEntity[]> {
+  async findAll(page = 1, limit = 100): Promise<InvoiceEntity[]> {
+    const skip = (page - 1) * limit;
     const invoices = await this.prisma.invoice.findMany({
+      skip,
+      take: limit,
       orderBy: { createdAt: 'desc' },
     });
     return invoices.map(i => this.mapToEntity(i));
   }
 
-  async findAllByUserId(userId: string): Promise<InvoiceEntity[]> {
+  async findAllByUserId(userId: string, page = 1, limit = 100): Promise<InvoiceEntity[]> {
+    const skip = (page - 1) * limit;
     const invoices = await this.prisma.invoice.findMany({
       where: { userId },
+      skip,
+      take: limit,
       orderBy: { createdAt: 'desc' },
     });
     return invoices.map(i => this.mapToEntity(i));

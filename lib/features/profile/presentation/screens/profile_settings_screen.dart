@@ -261,7 +261,7 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
     final picked = await picker.pickImage(source: ImageSource.gallery, maxWidth: 512, maxHeight: 512);
     if (picked == null) return;
     try {
-      await ref.read(profileControllerProvider.notifier).uploadAvatar(picked.path);
+      await ref.read(profileControllerProvider.notifier).uploadAvatar(picked);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Photo updated'), backgroundColor: _teal),
@@ -567,9 +567,8 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
       (Icons.sensors_rounded, 'Telemetry'),
       (Icons.receipt_long_rounded, 'Billing'),
       (Icons.confirmation_number_outlined, 'Tickets'),
-      (Icons.person_outline_rounded, 'Profile'),
     ];
-    final routes = ['/client-dashboard', '/solar-grid', '/telemetry', '/billing', '/tickets', null];
+    final List<String?> routes = ['/client-dashboard', '/solar-grid', '/telemetry', '/billing', '/tickets'];
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,

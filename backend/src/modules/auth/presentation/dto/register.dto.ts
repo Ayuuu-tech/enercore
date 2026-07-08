@@ -21,4 +21,8 @@ export class RegisterDto {
   @IsString()
   @IsOptional()
   companyName?: string; // Required only if role === VENDOR
+
+  @IsString()
+  @IsOptional()
+  phone?: string;
 }

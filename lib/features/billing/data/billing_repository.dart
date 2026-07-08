@@ -5,17 +5,17 @@ import '../../auth/data/auth_repository.dart';
 import '../domain/invoice_model.dart';
 
 final billingRepositoryProvider = Provider<BillingRepository>((ref) {
-  final authRepository = ref.read(authRepositoryProvider) as HttpAuthRepository;
+  final authRepository = ref.read(authRepositoryProvider);
   return BillingRepository(authRepository);
 });
 
 class BillingRepository {
-  final HttpAuthRepository _authRepository;
+  final AuthRepository _authRepository;
 
   BillingRepository(this._authRepository);
 
   Future<List<InvoiceModel>> getInvoices() async {
-    final token = HttpAuthRepository.token;
+    final token = _authRepository.token;
     final response = await httpGet(
       Uri.parse('${_authRepository.baseUrl}/billing'),
       headers: {
@@ -33,7 +33,7 @@ class BillingRepository {
   }
 
   Future<InvoiceModel> payInvoice(String id) async {
-    final token = HttpAuthRepository.token;
+    final token = _authRepository.token;
     final response = await httpPost(
       Uri.parse('${_authRepository.baseUrl}/billing/$id/pay'),
       headers: {

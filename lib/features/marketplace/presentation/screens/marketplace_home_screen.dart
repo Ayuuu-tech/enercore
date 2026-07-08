@@ -1,16 +1,23 @@
 import 'package:flutter/material.dart';
+import '../../../../core/widgets/user_avatar.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../vendor/domain/vendor_models.dart';
+import '../../data/marketplace_repository.dart';
 
-class MarketplaceHomeScreen extends StatefulWidget {
+class MarketplaceHomeScreen extends ConsumerStatefulWidget {
   const MarketplaceHomeScreen({super.key});
 
   @override
-  State<MarketplaceHomeScreen> createState() => _MarketplaceHomeScreenState();
+  ConsumerState<MarketplaceHomeScreen> createState() => _MarketplaceHomeScreenState();
 }
 
-class _MarketplaceHomeScreenState extends State<MarketplaceHomeScreen> {
+class _MarketplaceHomeScreenState extends ConsumerState<MarketplaceHomeScreen> {
   int _selectedFilter = 0;
   final int _selectedNav = -1; // Sub-marketplace navigation
+  String _search = '';
+
+  static const _categories = ['All', 'Solar Panels', 'Inverters', 'Cables'];
 
   // Premium Design System
   static const _bg = Color(0xFFF4F6F8);
@@ -20,8 +27,26 @@ class _MarketplaceHomeScreenState extends State<MarketplaceHomeScreen> {
   static const _slateDark = Color(0xFF1E293B);
   static const _slateLight = Color(0xFF64748B);
 
+  List<VendorProductModel> _filter(List<VendorProductModel> products) {
+    var out = products;
+    if (_selectedFilter > 0) {
+      out = out.where((p) => p.category == _categories[_selectedFilter]).toList();
+    }
+    if (_search.trim().isNotEmpty) {
+      final q = _search.trim().toLowerCase();
+      out = out
+          .where((p) =>
+              p.title.toLowerCase().contains(q) ||
+              p.brand.toLowerCase().contains(q) ||
+              p.spec.toLowerCase().contains(q))
+          .toList();
+    }
+    return out;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final productsAsync = ref.watch(marketplaceProductsProvider);
     return Scaffold(
       backgroundColor: _bg,
       body: SafeArea(
@@ -29,50 +54,62 @@ class _MarketplaceHomeScreenState extends State<MarketplaceHomeScreen> {
           children: [
             _topBar(),
             Expanded(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
+              child: productsAsync.when(
+                loading: () => const Center(child: CircularProgressIndicator(color: _teal)),
+                error: (e, _) => Center(
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      _breadcrumbs(),
-                      const SizedBox(height: 14),
-                      _searchBar(),
-                      const SizedBox(height: 16),
-                      _categoriesRow(),
-                      const SizedBox(height: 18),
-                      _resultsInfoRow(),
-                      const SizedBox(height: 14),
-                      _productCard(
-                        image: 'assets/images/panel_warehouse.jpg', // Placeholder logic is beautiful, we can draw a premium decorative banner card
-                        brand: 'LUMOS ENERGY',
-                        title: '550W Monocrystalline PV Module',
-                        spec: '22.5% Efficiency | Half-cut Cell Tech',
-                        rating: '4.8',
-                        reviewsCount: '156',
-                        price: '₹18,450',
-                        originalPrice: '₹21,000',
-                        isAssured: true,
-                        dummyIndex: 0,
+                      Text('Could not load products\n$e',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: _slateLight, fontSize: 12)),
+                      TextButton(
+                        onPressed: () => ref.refresh(marketplaceProductsProvider),
+                        child: const Text('Retry',
+                            style: TextStyle(color: _teal, fontWeight: FontWeight.w700)),
                       ),
-                      const SizedBox(height: 16),
-                      _productCard(
-                        image: 'assets/images/panel_sky.jpg',
-                        brand: 'ECOPOWER',
-                        title: '440W Bifacial Dual Glass Panel',
-                        spec: 'High Output | 30-year Warranty',
-                        rating: '4.9',
-                        reviewsCount: '82',
-                        price: '₹15,200',
-                        originalPrice: null,
-                        isAssured: true,
-                        dummyIndex: 1,
-                      ),
-                      const SizedBox(height: 20),
                     ],
                   ),
                 ),
+                data: (products) {
+                  final filtered = _filter(products);
+                  return RefreshIndicator(
+                    color: _teal,
+                    onRefresh: () => ref.refresh(marketplaceProductsProvider.future),
+                    child: SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _breadcrumbs(),
+                            const SizedBox(height: 14),
+                            _searchBar(),
+                            const SizedBox(height: 16),
+                            _categoriesRow(),
+                            const SizedBox(height: 18),
+                            _resultsInfoRow(filtered.length),
+                            const SizedBox(height: 14),
+                            if (filtered.isEmpty)
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 40),
+                                child: Center(
+                                  child: Text('No products found',
+                                      style: TextStyle(color: _slateLight, fontSize: 12)),
+                                ),
+                              ),
+                            for (final product in filtered) ...[
+                              _productCard(product),
+                              const SizedBox(height: 16),
+                            ],
+                            const SizedBox(height: 4),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
             _bottomNav(),
@@ -116,17 +153,7 @@ class _MarketplaceHomeScreenState extends State<MarketplaceHomeScreen> {
             ),
           ),
           const Spacer(),
-          Container(
-            width: 32,
-            height: 32,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              image: DecorationImage(
-                image: NetworkImage('https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=80&fit=crop&q=80'),
-                fit: BoxFit.cover,
-              ),
-            ),
-          ),
+          const UserAvatar(size: 32),
         ],
       ),
     );
@@ -156,12 +183,14 @@ class _MarketplaceHomeScreenState extends State<MarketplaceHomeScreen> {
         border: Border.all(color: _cardBorder, width: 1),
       ),
       child: Row(
-        children: const [
-          Icon(Icons.search_rounded, color: _slateLight, size: 18),
-          SizedBox(width: 8),
+        children: [
+          const Icon(Icons.search_rounded, color: _slateLight, size: 18),
+          const SizedBox(width: 8),
           Expanded(
             child: TextField(
-              decoration: InputDecoration(
+              onChanged: (v) => setState(() => _search = v),
+              style: const TextStyle(color: _slateDark, fontSize: 12, fontWeight: FontWeight.w600),
+              decoration: const InputDecoration(
                 hintText: 'Search solar equipment...',
                 hintStyle: TextStyle(color: _slateLight, fontSize: 12, fontWeight: FontWeight.w500),
                 border: InputBorder.none,
@@ -176,7 +205,7 @@ class _MarketplaceHomeScreenState extends State<MarketplaceHomeScreen> {
 
   // ── Categories Row ─────────────────────────────────────────────────────────
   Widget _categoriesRow() {
-    final cats = ['All', 'Solar Panels', 'Inverters', 'Cables'];
+    final cats = _categories;
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       physics: const BouncingScrollPhysics(),
@@ -209,13 +238,13 @@ class _MarketplaceHomeScreenState extends State<MarketplaceHomeScreen> {
   }
 
   // ── Results Info Row ───────────────────────────────────────────────────────
-  Widget _resultsInfoRow() {
+  Widget _resultsInfoRow(int count) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        const Text(
-          '124 products',
-          style: TextStyle(color: _slateLight, fontSize: 11, fontWeight: FontWeight.w700),
+        Text(
+          '$count product${count == 1 ? '' : 's'}',
+          style: const TextStyle(color: _slateLight, fontSize: 11, fontWeight: FontWeight.w700),
         ),
         Row(
           children: const [
@@ -239,20 +268,17 @@ class _MarketplaceHomeScreenState extends State<MarketplaceHomeScreen> {
   }
 
   // ── Product Card Component ─────────────────────────────────────────────────
-  Widget _productCard({
-    required String image,
-    required String brand,
-    required String title,
-    required String spec,
-    required String rating,
-    required String reviewsCount,
-    required String price,
-    required String? originalPrice,
-    required bool isAssured,
-    required int dummyIndex,
-  }) {
+  Widget _productCard(VendorProductModel product) {
+    final brand = product.brand;
+    final title = product.title;
+    final spec = product.spec;
+    final rating = product.rating.toStringAsFixed(1);
+    final reviewsCount = product.reviewsCount.toString();
+    final price = formatInr(product.price);
+    final originalPrice = product.originalPrice != null ? formatInr(product.originalPrice!) : null;
+    final isAssured = product.isAssured;
     return GestureDetector(
-      onTap: () => context.push('/product-detail'),
+      onTap: () => context.push('/product-detail', extra: product.id),
       child: Container(
         decoration: BoxDecoration(
           color: _card,
@@ -280,11 +306,7 @@ class _MarketplaceHomeScreenState extends State<MarketplaceHomeScreen> {
                     decoration: BoxDecoration(
                       color: const Color(0xFFF1F5F9),
                       image: DecorationImage(
-                        image: NetworkImage(
-                          dummyIndex == 0
-                              ? 'https://images.unsplash.com/photo-1509391366360-2e959784a276?w=400&fit=crop&q=80'
-                              : 'https://images.unsplash.com/photo-1508514177221-188b1cf16e9d?w=400&fit=crop&q=80',
-                        ),
+                        image: NetworkImage(productImageFor(product)),
                         fit: BoxFit.cover,
                       ),
                     ),
@@ -419,9 +441,8 @@ class _MarketplaceHomeScreenState extends State<MarketplaceHomeScreen> {
       (Icons.sensors_rounded, 'Telemetry'),
       (Icons.receipt_long_rounded, 'Billing'),
       (Icons.confirmation_number_outlined, 'Tickets'),
-      (Icons.person_outline_rounded, 'Profile'),
     ];
-    final routes = ['/client-dashboard', '/solar-grid', '/telemetry', '/billing', '/tickets', '/profile'];
+    final routes = ['/client-dashboard', '/solar-grid', '/telemetry', '/billing', '/tickets'];
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,

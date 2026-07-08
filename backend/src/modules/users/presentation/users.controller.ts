@@ -17,7 +17,6 @@ import { diskStorage } from 'multer';
 import { extname, join } from 'path';
 import { v4 as uuid } from 'uuid';
 import { UsersService } from '../application/users.service';
-import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
@@ -77,13 +76,13 @@ export class UsersController {
     FileInterceptor('avatar', {
       storage: diskStorage({
         destination: join(__dirname, '..', '..', '..', '..', '..', 'uploads', 'avatars'),
-        filename: (_req: any, file: any, cb: any) => {
+        filename: (_req: Express.Request, file: Express.Multer.File, cb: (error: Error | null, filename: string) => void) => {
           const name = uuid();
           const ext = extname(file.originalname);
           cb(null, `${name}${ext}`);
         },
       }),
-      fileFilter: (_req: any, file: any, cb: any) => {
+      fileFilter: (_req: Express.Request, file: Express.Multer.File, cb: (error: Error | null, acceptFile: boolean) => void) => {
         if (!file.mimetype.match(/^image\//)) {
           cb(new BadRequestException('Only image files are allowed'), false);
           return;
@@ -95,7 +94,7 @@ export class UsersController {
   )
   async uploadAvatar(
     @Param('id') id: string,
-    @UploadedFile() file: any,
+    @UploadedFile() file: Express.Multer.File,
     @CurrentUser() currentUser: UserEntity,
   ) {
     if (currentUser.role !== Role.ADMIN && currentUser.id !== id) {

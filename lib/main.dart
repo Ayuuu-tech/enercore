@@ -14,18 +14,19 @@ void main() {
   runApp(const ProviderScope(child: EnercoreApp()));
 }
 
-class EnercoreApp extends StatelessWidget {
+class EnercoreApp extends ConsumerWidget {
   const EnercoreApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final router = ref.watch(appRouterProvider);
     return MaterialApp.router(
       title: 'Enercore',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.light,
-      routerConfig: appRouter,
+      routerConfig: router,
     );
   }
 }

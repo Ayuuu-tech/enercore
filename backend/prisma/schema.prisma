@@ -47,12 +47,35 @@ enum TicketPriority {
   HIGH
 }
 
+enum SubscriptionPlan {
+  MONTHLY
+  YEARLY
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  PENDING
+  SUSPENDED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  SUCCESS
+  PENDING
+  FAILED
+  REFUNDED
+}
+
 model User {
   id             String          @id @default(uuid())
   email          String          @unique
   password       String
   name           String
   role           Role            @default(CLIENT)
+  isActive       Boolean         @default(true)
+  // Modules/features this user may access. Empty = all (default).
+  modules        String[]        @default([])
   phone          String?
   company        String?
   gstNumber      String?
@@ -62,12 +85,81 @@ model User {
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   plants         Plant[]
+  plantAccess    PlantAccess[]
   tickets        Ticket[]
   ticketComments TicketComment[]
   orders         Order[]
   notifications  Notification[]
   invoices       Invoice[]
   vendorProfile  Vendor?
+  subscriptions  Subscription[]
+  payments       Payment[]
+}
+
+// A user's subscription period. Admin-managed (no external gateway).
+model Subscription {
+  id         String             @id @default(uuid())
+  userId     String
+  user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan       SubscriptionPlan   @default(MONTHLY)
+  status     SubscriptionStatus @default(PENDING)
+  amount     Float              @default(0)
+  startDate  DateTime           @default(now())
+  expiryDate DateTime
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+  payments   Payment[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+// Immutable trail of admin actions.
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String
+  actorName  String
+  action     String
+  targetType String?
+  targetId   String?
+  detail     String?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([actorId])
+}
+
+// A payment record. Can be linked to a subscription.
+model Payment {
+  id             String        @id @default(uuid())
+  userId         String
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscriptionId String?
+  subscription   Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  amount         Float
+  status         PaymentStatus @default(PENDING)
+  method         String?
+  reference      String?
+  paidAt         DateTime?
+  createdAt      DateTime      @default(now())
+
+  @@index([userId])
+  @@index([status])
+}
+
+// Grants a user access to a plant they do not own (many-to-many).
+// Effective plant access = plants owned + plants granted here.
+model PlantAccess {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plantId   String
+  plant     Plant    @relation(fields: [plantId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, plantId])
+  @@index([userId])
+  @@index([plantId])
 }
 
 model Vendor {
@@ -95,6 +187,7 @@ model Plant {
   tickets      Ticket[]
   telemetry    Telemetry[]
   invoices     Invoice[]
+  accessGrants PlantAccess[]
 }
 
 model Panel {

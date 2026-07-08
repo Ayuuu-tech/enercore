@@ -15,6 +15,8 @@ export class PrismaUserRepository implements IUserRepository {
       password: prismaUser.password,
       name: prismaUser.name,
       role: prismaUser.role,
+      isActive: prismaUser.isActive,
+      modules: prismaUser.modules,
       phone: prismaUser.phone,
       company: prismaUser.company,
       gstNumber: prismaUser.gstNumber,

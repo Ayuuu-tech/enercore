@@ -18,12 +18,12 @@ export class TicketingService {
     return ticket;
   }
 
-  async findAll(): Promise<TicketEntity[]> {
-    return this.ticketRepository.findAll();
+  async findAll(page = 1, limit = 100): Promise<TicketEntity[]> {
+    return this.ticketRepository.findAll(page, limit);
   }
 
-  async findAllByUser(userId: string): Promise<TicketEntity[]> {
-    return this.ticketRepository.findAllByUserId(userId);
+  async findAllByUser(userId: string, page = 1, limit = 100): Promise<TicketEntity[]> {
+    return this.ticketRepository.findAllByUserId(userId, page, limit);
   }
 
   async createTicket(userId: string, dto: Partial<TicketEntity>): Promise<TicketEntity> {

@@ -6,17 +6,17 @@ import '../domain/ticket_model.dart';
 import '../domain/ticket_comment_model.dart';
 
 final ticketingRepositoryProvider = Provider<TicketingRepository>((ref) {
-  final authRepository = ref.read(authRepositoryProvider) as HttpAuthRepository;
+  final authRepository = ref.read(authRepositoryProvider);
   return TicketingRepository(authRepository);
 });
 
 class TicketingRepository {
-  final HttpAuthRepository _authRepository;
+  final AuthRepository _authRepository;
 
   TicketingRepository(this._authRepository);
 
   Map<String, String> get _headers {
-    final token = HttpAuthRepository.token;
+    final token = _authRepository.token;
     return {
       'Content-Type': 'application/json',
       if (token != null) 'Authorization': 'Bearer $token',
@@ -99,7 +99,7 @@ class TicketingRepository {
     final response = await httpPost(
       Uri.parse('${_authRepository.baseUrl}/tickets/$ticketId/comments'),
       headers: _headers,
-      body: jsonEncode({'content': message}),
+      body: jsonEncode({'message': message}),
     );
 
     if (response.statusCode == 201 || response.statusCode == 200) {

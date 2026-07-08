@@ -1,17 +1,32 @@
-import 'dart:math' as math;
+import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../../../core/widgets/user_avatar.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../ticketing/data/plants_repository.dart';
+import '../../../ticketing/domain/plant_model.dart';
+import '../../data/telemetry_repository.dart';
+import '../widgets/chart_painters.dart';
 
-class SolarGridScreen extends StatefulWidget {
+class SolarGridScreen extends ConsumerStatefulWidget {
   const SolarGridScreen({super.key});
 
   @override
-  State<SolarGridScreen> createState() => _SolarGridScreenState();
+  ConsumerState<SolarGridScreen> createState() => _SolarGridScreenState();
 }
 
-class _SolarGridScreenState extends State<SolarGridScreen> {
+class _SolarGridScreenState extends ConsumerState<SolarGridScreen> {
   int _selectedNav = 1; // Plants tab active
-  final List<int> _panelStatuses = [];
+
+  List<PlantModel> _plants = [];
+  PlantModel? _plant;
+  List<PanelModel> _panels = [];
+  List<DeviceModel> _devices = [];
+  List<TelemetrySeriesPoint> _series = [];
+  bool _loading = true;
+  bool _noPlants = false;
+  String? _error;
+  Timer? _refreshTimer;
 
   // Premium Design Tokens
   static const _bg = Color(0xFFF4F6F8);
@@ -24,22 +39,66 @@ class _SolarGridScreenState extends State<SolarGridScreen> {
   @override
   void initState() {
     super.initState();
-    _initPanelStatuses();
+    _load();
+    // Backend syncs Trackso data every 2 minutes; refresh at the same cadence.
+    _refreshTimer = Timer.periodic(const Duration(minutes: 2), (_) => _load());
   }
 
-  void _initPanelStatuses() {
-    final rand = math.Random(42); // Seeded random for consistent layout matching screenshot
-    for (int i = 0; i < 256; i++) {
-      // 88% active, 7% fault, 5% offline
-      int r = rand.nextInt(100);
-      if (r < 88) {
-        _panelStatuses.add(0); // Active
-      } else if (r < 94) {
-        _panelStatuses.add(1); // Fault
-      } else {
-        _panelStatuses.add(2); // Offline
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    try {
+      final repo = ref.read(plantsRepositoryProvider);
+      if (_plants.isEmpty) {
+        _plants = await repo.getPlants();
+        if (_plants.isEmpty) {
+          // New/unassigned account: show a friendly empty state, not an error.
+          if (!mounted) return;
+          setState(() {
+            _noPlants = true;
+            _loading = false;
+            _error = null;
+          });
+          return;
+        }
       }
+      final plant = _plant ?? _plants.first;
+      final telemetryRepo = ref.read(telemetryRepositoryProvider);
+      final results = await Future.wait<dynamic>([
+        repo.getPanels(plant.id),
+        telemetryRepo.getSeries(plant.id, 6),
+        telemetryRepo.getDevices(plant.id),
+      ]);
+      final panels = results[0] as List<PanelModel>;
+      panels.sort((a, b) => a.row != b.row ? a.row.compareTo(b.row) : a.column.compareTo(b.column));
+      if (!mounted) return;
+      setState(() {
+        _plant = plant;
+        _panels = panels;
+        _series = results[1] as List<TelemetrySeriesPoint>;
+        _devices = results[2] as List<DeviceModel>;
+        _loading = false;
+        _error = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = e.toString();
+      });
     }
+  }
+
+  String _relativeTime(DateTime t) {
+    final diff = DateTime.now().difference(t);
+    if (diff.inSeconds < 60) return '${diff.inSeconds}s ago';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
   }
 
   @override
@@ -50,6 +109,64 @@ class _SolarGridScreenState extends State<SolarGridScreen> {
         child: Column(
           children: [
             _topBar(),
+            if (_loading)
+              const Expanded(
+                child: Center(child: CircularProgressIndicator(color: _teal)),
+              )
+            else if (_noPlants)
+              const Expanded(
+                child: Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.solar_power_outlined, color: _slateLight, size: 40),
+                        SizedBox(height: 12),
+                        Text(
+                          'No plants assigned yet',
+                          style: TextStyle(color: _slateDark, fontSize: 15, fontWeight: FontWeight.w800),
+                        ),
+                        SizedBox(height: 6),
+                        Text(
+                          'Your administrator has not assigned any plant to your account. Please contact them to get access.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: _slateLight, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              )
+            else if (_error != null)
+              Expanded(
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.cloud_off_rounded, color: _slateLight, size: 36),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Could not load plant data\n$_error',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: _slateLight, fontSize: 12),
+                        ),
+                        const SizedBox(height: 16),
+                        TextButton(
+                          onPressed: () {
+                            setState(() => _loading = true);
+                            _load();
+                          },
+                          child: const Text('Retry', style: TextStyle(color: _teal, fontWeight: FontWeight.w700)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              )
+            else
             Expanded(
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
@@ -60,6 +177,8 @@ class _SolarGridScreenState extends State<SolarGridScreen> {
                       padding: const EdgeInsets.all(16),
                       child: Column(
                         children: [
+                          _plantSelector(),
+                          const SizedBox(height: 16),
                           _plantOverviewCard(),
                           const SizedBox(height: 16),
                           _panelLayoutCard(),
@@ -120,17 +239,7 @@ class _SolarGridScreenState extends State<SolarGridScreen> {
             ),
           ),
           const Spacer(),
-          Container(
-            width: 32,
-            height: 32,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              image: DecorationImage(
-                image: NetworkImage('https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=80&fit=crop&q=80'),
-                fit: BoxFit.cover,
-              ),
-            ),
-          ),
+          const UserAvatar(size: 32),
         ],
       ),
     );
@@ -163,12 +272,57 @@ class _SolarGridScreenState extends State<SolarGridScreen> {
             ),
           ),
           const Text('  >  ', style: TextStyle(color: _slateLight, fontSize: 11.5)),
-          const Text(
-            'Plant Alpha – Pune',
-            style: TextStyle(
-              color: _teal,
-              fontSize: 11.5,
-              fontWeight: FontWeight.w700,
+          Expanded(
+            child: Text(
+              _plant != null ? '${_plant!.name} – ${_plant!.location}' : '',
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: _teal,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Plant Selector ─────────────────────────────────────────────────────────
+  Widget _plantSelector() {
+    if (_plants.length < 2) return const SizedBox.shrink();
+    return Container(
+      height: 46,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _cardBorder, width: 1),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.solar_power_rounded, color: _teal, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: _plant?.id,
+                isExpanded: true,
+                icon: const Icon(Icons.keyboard_arrow_down_rounded, color: _slateLight, size: 20),
+                style: const TextStyle(color: _slateDark, fontSize: 13, fontWeight: FontWeight.w700),
+                items: _plants
+                    .map((p) => DropdownMenuItem(
+                          value: p.id,
+                          child: Text('${p.name} – ${p.location}', overflow: TextOverflow.ellipsis),
+                        ))
+                    .toList(),
+                onChanged: (id) {
+                  if (id == null || id == _plant?.id) return;
+                  setState(() => _plant = _plants.firstWhere((p) => p.id == id));
+                  // Keep showing current data until the new plant's data arrives
+                  _load();
+                },
+              ),
             ),
           ),
         ],
@@ -178,20 +332,39 @@ class _SolarGridScreenState extends State<SolarGridScreen> {
 
   // ── Plant Overview Card ────────────────────────────────────────────────────
   Widget _plantOverviewCard() {
+    final plant = _plant!;
+    final capacity = plant.peakCapacity >= 1000
+        ? '${(plant.peakCapacity / 1000).toStringAsFixed(1)}MW'
+        : '${plant.peakCapacity.toStringAsFixed(0)}kW';
+    // Device (inverter) health: ERROR/UNKNOWN count against uptime; INACTIVE at
+    // night is normal for solar and does not.
+    final errorDevices = _devices.where((d) => d.status == 'ERROR' || d.status == 'UNKNOWN').length;
+    final uptime = _devices.isEmpty ? 0.0 : (_devices.length - errorDevices) / _devices.length * 100;
+    final totalPowerKw = _devices.fold<double>(0, (sum, d) => sum + d.activePowerKw);
+    final generation = totalPowerKw >= 1000
+        ? '${(totalPowerKw / 1000).toStringAsFixed(2)}MW'
+        : '${totalPowerKw.toStringAsFixed(1)}kW';
+    final lastSync = _panels.isEmpty
+        ? '—'
+        : _relativeTime(_panels.map((p) => p.lastSync).reduce((a, b) => a.isAfter(b) ? a : b));
+
     return _card_(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            children: const [
-              Icon(Icons.location_on_rounded, color: _teal, size: 18),
-              SizedBox(width: 6),
-              Text(
-                'Plant Alpha – Pune',
-                style: TextStyle(
-                  color: _slateDark,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
+            children: [
+              const Icon(Icons.location_on_rounded, color: _teal, size: 18),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  '${plant.name} – ${plant.location}',
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _slateDark,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
             ],
@@ -199,9 +372,9 @@ class _SolarGridScreenState extends State<SolarGridScreen> {
           const SizedBox(height: 10),
           Row(
             children: [
-              _badgeChip('800kW', const Color(0xFFFEF3C7), const Color(0xFFD97706)),
+              _badgeChip(capacity, const Color(0xFFFEF3C7), const Color(0xFFD97706)),
               const SizedBox(width: 8),
-              _badgeChip('Operational', const Color(0xFFD1FAE5), _teal),
+              _badgeChip(plant.status, const Color(0xFFD1FAE5), _teal),
             ],
           ),
           const SizedBox(height: 16),
@@ -209,15 +382,15 @@ class _SolarGridScreenState extends State<SolarGridScreen> {
           const SizedBox(height: 16),
           Row(
             children: [
-              _overviewStat('CAPACITY', '800kW', false),
-              _overviewStat('LAST SYNC', '3m ago', false),
+              _overviewStat('CAPACITY', capacity, false),
+              _overviewStat('LAST SYNC', lastSync, false),
             ],
           ),
           const SizedBox(height: 14),
           Row(
             children: [
-              _overviewStat('UPTIME', '99.8%', true),
-              _overviewStat('TODAY', '1.2MWh', true),
+              _overviewStat('DEVICE UPTIME', '${uptime.toStringAsFixed(0)}%', true),
+              _overviewStat('LIVE OUTPUT', generation, true),
             ],
           ),
         ],
@@ -271,67 +444,175 @@ class _SolarGridScreenState extends State<SolarGridScreen> {
     );
   }
 
-  // ── Panel Layout Card ──────────────────────────────────────────────────────
+  // Colour for a device status
+  Color _deviceColor(String status) {
+    switch (status) {
+      case 'ACTIVE':
+        return const Color(0xFF10B981); // green
+      case 'ERROR':
+        return const Color(0xFFEF4444); // red
+      case 'INACTIVE':
+        return const Color(0xFFCBD5E1); // gray (idle / night)
+      default:
+        return const Color(0xFFF5A623); // amber (unknown)
+    }
+  }
+
+  // ── Device Layout Card ─────────────────────────────────────────────────────
   Widget _panelLayoutCard() {
+    final inverters = _devices.where((d) => d.type == 'INVERTER').toList();
+    final meters = _devices.where((d) => d.type == 'METER').toList();
+    final others = _devices.where((d) => d.type == 'OTHER').toList();
+
     return _card_(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
+            children: [
               Text(
-                'Panel Layout – 256 units',
-                style: TextStyle(
+                'Devices – ${_devices.length} total',
+                style: const TextStyle(
                   color: _slateDark,
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              Icon(Icons.grid_view_rounded, color: _slateLight, size: 18),
+              const Icon(Icons.electrical_services_rounded, color: _slateLight, size: 18),
             ],
           ),
-          const SizedBox(height: 16),
-          // 16x16 grid
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 16,
-              crossAxisSpacing: 3,
-              mainAxisSpacing: 3,
-            ),
-            itemCount: 256,
-            itemBuilder: (context, idx) {
-              final status = _panelStatuses[idx];
-              Color col = const Color(0xFF6EE7B7); // Active (Teal)
-              if (status == 1) {
-                col = const Color(0xFFFCA5A5); // Fault (Red)
-              } else if (status == 2) {
-                col = const Color(0xFFCBD5E1); // Off-line (Gray)
-              }
-              return Container(
-                decoration: BoxDecoration(
-                  color: col,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 16),
-          // Legend row
+          const SizedBox(height: 14),
+          // Type summary tiles
           Row(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _legendIndicator(const Color(0xFF6EE7B7), 'Active'),
-              const SizedBox(width: 16),
-              _legendIndicator(const Color(0xFFFCA5A5), 'Fault'),
-              const SizedBox(width: 16),
-              _legendIndicator(const Color(0xFFCBD5E1), 'Off-line'),
+              Expanded(child: _typeTile('Inverters', inverters.length, Icons.solar_power_rounded)),
+              const SizedBox(width: 10),
+              Expanded(child: _typeTile('Meters', meters.length, Icons.speed_rounded)),
+              if (others.isNotEmpty) ...[
+                const SizedBox(width: 10),
+                Expanded(child: _typeTile('Other', others.length, Icons.settings_input_component_rounded)),
+              ],
+            ],
+          ),
+          const SizedBox(height: 18),
+          if (_devices.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 20),
+              child: Center(
+                child: Text('No devices reported for this site',
+                    style: TextStyle(color: _slateLight, fontSize: 11.5)),
+              ),
+            ),
+          if (inverters.isNotEmpty) _deviceGroup('INVERTERS', inverters),
+          if (meters.isNotEmpty) _deviceGroup('METERS', meters),
+          if (others.isNotEmpty) _deviceGroup('OTHER EQUIPMENT', others),
+          if (_devices.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _legendIndicator(const Color(0xFF10B981), 'Active'),
+                const SizedBox(width: 14),
+                _legendIndicator(const Color(0xFFEF4444), 'Error'),
+                const SizedBox(width: 14),
+                _legendIndicator(const Color(0xFFCBD5E1), 'Idle'),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _typeTile(String label, int count, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _cardBorder, width: 0.8),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: _teal, size: 18),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('$count', style: const TextStyle(color: _slateDark, fontSize: 16, fontWeight: FontWeight.w900)),
+              Text(label, style: const TextStyle(color: _slateLight, fontSize: 9.5, fontWeight: FontWeight.w600)),
             ],
           ),
         ],
       ),
+    );
+  }
+
+  Widget _deviceGroup(String title, List<DeviceModel> devices) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 4, bottom: 8),
+          child: Text(
+            '$title (${devices.length})',
+            style: const TextStyle(
+                color: _slateLight, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+          ),
+        ),
+        for (final entry in devices.asMap().entries) ...[
+          if (entry.key > 0) const Divider(color: Color(0xFFF1F5F9), height: 18),
+          _deviceRow(entry.value),
+        ],
+        const SizedBox(height: 14),
+      ],
+    );
+  }
+
+  Widget _deviceRow(DeviceModel device) {
+    final color = _deviceColor(device.status);
+    return Row(
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                device.name,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: _slateDark, fontSize: 12.5, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Today: ${device.dailyEnergyKwh.toStringAsFixed(1)} kWh',
+                style: const TextStyle(color: _slateLight, fontSize: 10.5, fontWeight: FontWeight.w500),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              '${device.activePowerKw.toStringAsFixed(1)} kW',
+              style: const TextStyle(color: _slateDark, fontSize: 12, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              device.status,
+              style: TextStyle(color: color, fontSize: 9.5, fontWeight: FontWeight.w800),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -358,6 +639,41 @@ class _SolarGridScreenState extends State<SolarGridScreen> {
 
   // ── Live Telemetry Card ────────────────────────────────────────────────────
   Widget _liveTelemetryCard() {
+    // Real AC readings from inverters that are currently reporting voltage
+    final reportingV = _devices.where((d) => d.acVoltage > 0).toList();
+    final avgVoltage = reportingV.isEmpty
+        ? 0.0
+        : reportingV.map((d) => d.acVoltage).reduce((a, b) => a + b) / reportingV.length;
+    final totalCurrent = _devices.fold<double>(0, (s, d) => s + d.acCurrent);
+    final freqs = _devices.where((d) => d.acFrequency > 0).toList();
+    final avgFrequency = freqs.isEmpty
+        ? 0.0
+        : freqs.map((d) => d.acFrequency).reduce((a, b) => a + b) / freqs.length;
+    // Device-level health (real Trackso inverter status)
+    final deviceCount = _devices.length;
+    final activeDevices = _devices.where((d) => d.status == 'ACTIVE').length;
+    final erroredDevices = _devices.where((d) => d.status == 'ERROR' || d.status == 'UNKNOWN').length;
+    final generating = _devices.any((d) => d.activePowerKw > 0);
+    final lastSync = _panels.isEmpty
+        ? null
+        : _panels.map((p) => p.lastSync).reduce((a, b) => a.isAfter(b) ? a : b);
+
+    // Grid health from real device errors; night idle is not a fault
+    final String health;
+    final Color healthColor;
+    if (deviceCount > 0 && erroredDevices > deviceCount * 0.3) {
+      health = 'Degraded';
+      healthColor = const Color(0xFFEF4444);
+    } else if (erroredDevices > 0) {
+      health = 'Attention';
+      healthColor = const Color(0xFFF5A623);
+    } else if (!generating) {
+      health = 'Idle (no sun)';
+      healthColor = _slateLight;
+    } else {
+      health = 'Excellent';
+      healthColor = const Color(0xFF10B981);
+    }
     return _card_(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -385,7 +701,7 @@ class _SolarGridScreenState extends State<SolarGridScreen> {
                   ),
                   const SizedBox(width: 4),
                   const Text(
-                    'MQTT Connected',
+                    'Live Sync',
                     style: TextStyle(
                       color: Color(0xFF10B981),
                       fontSize: 10,
@@ -397,39 +713,45 @@ class _SolarGridScreenState extends State<SolarGridScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          // Voltage progress
-          _telemetryProgress('Voltage', '285V', 0.57),
+          // Real AC voltage from inverters (grid ~230V/phase nominal)
+          _telemetryProgress('AC Voltage (avg)', '${avgVoltage.toStringAsFixed(1)} V', (avgVoltage / 260).clamp(0.0, 1.0)),
           const SizedBox(height: 14),
-          // Current progress
-          _telemetryProgress('Current', '350A', 0.70),
+          // Real total AC current across inverters
+          _telemetryProgress('AC Current (total)', '${totalCurrent.toStringAsFixed(1)} A', (totalCurrent / (deviceCount * 200 + 1)).clamp(0.0, 1.0)),
           const SizedBox(height: 14),
-          // Frequency progress
-          _telemetryProgress('Frequency', '50.0Hz', 0.83, isAmber: true),
+          // Real grid frequency (50Hz nominal in India)
+          _telemetryProgress('AC Frequency', '${avgFrequency.toStringAsFixed(2)} Hz', avgFrequency == 0 ? 0 : ((avgFrequency - 49) / 2).clamp(0.0, 1.0), isAmber: true),
           const SizedBox(height: 18),
           // Sub-cards row
           Row(
             children: [
-              Expanded(child: _statusSubcard('Grid Health', 'Excellent')),
+              Expanded(child: _statusSubcard('Grid Health', health, healthColor)),
               const SizedBox(width: 10),
-              Expanded(child: _statusSubcard('Inverter Status', 'Online')),
+              Expanded(
+                child: _statusSubcard(
+                  'Devices Active',
+                  '$activeDevices / $deviceCount',
+                  activeDevices > 0 ? const Color(0xFF10B981) : _slateLight,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
+            children: [
               Text(
-                'Power Factor\n0.98',
+                'Devices in Error\n$erroredDevices',
                 style: TextStyle(
-                  color: _slateDark,
+                  color: erroredDevices > 0 ? const Color(0xFFEF4444) : _slateDark,
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
                   height: 1.4,
                 ),
               ),
               Text(
-                'Updated 3s ago',
-                style: TextStyle(
+                lastSync != null ? 'Updated ${_relativeTime(lastSync)}' : '',
+                style: const TextStyle(
                   color: _slateLight,
                   fontSize: 10,
                   fontWeight: FontWeight.w500,
@@ -473,7 +795,7 @@ class _SolarGridScreenState extends State<SolarGridScreen> {
     );
   }
 
-  Widget _statusSubcard(String label, String value) {
+  Widget _statusSubcard(String label, String value, Color valueColor) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
@@ -495,8 +817,8 @@ class _SolarGridScreenState extends State<SolarGridScreen> {
           const SizedBox(height: 4),
           Text(
             value,
-            style: const TextStyle(
-              color: Color(0xFF10B981),
+            style: TextStyle(
+              color: valueColor,
               fontSize: 12,
               fontWeight: FontWeight.w800,
             ),
@@ -513,7 +835,7 @@ class _SolarGridScreenState extends State<SolarGridScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Voltage & Current',
+            'Voltage & Current (6h)',
             style: TextStyle(
               color: _slateDark,
               fontSize: 14,
@@ -524,10 +846,32 @@ class _SolarGridScreenState extends State<SolarGridScreen> {
           SizedBox(
             height: 90,
             width: double.infinity,
-            child: CustomPaint(
-              painter: _TelemetryChartPainter(),
-            ),
+            child: _series.length < 2
+                ? const Center(
+                    child: Text('Not enough data yet — collecting live telemetry',
+                        style: TextStyle(color: _slateLight, fontSize: 11)),
+                  )
+                : CustomPaint(
+                    painter: TelemetryChartPainter(
+                      voltage: _series.map((p) => p.avgVoltage).toList(),
+                      current: _series.map((p) => p.totalCurrent).toList(),
+                    ),
+                  ),
           ),
+          if (_series.length >= 2) ...[
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: List.generate(5, (i) {
+                final idx = (i * (_series.length - 1) / 4).round();
+                final t = _series[idx].timestamp;
+                return Text(
+                  '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}',
+                  style: const TextStyle(color: _slateLight, fontSize: 10, fontWeight: FontWeight.w500),
+                );
+              }),
+            ),
+          ],
           const SizedBox(height: 14),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -549,7 +893,7 @@ class _SolarGridScreenState extends State<SolarGridScreen> {
           width: 20,
           child: CustomPaint(
             size: const Size(20, 3),
-            painter: _LineLegendPainter(isSolid: isSolid, color: _teal),
+            painter: LineLegendPainter(isSolid: isSolid, color: _teal),
           ),
         ),
         const SizedBox(width: 6),
@@ -567,6 +911,8 @@ class _SolarGridScreenState extends State<SolarGridScreen> {
 
   // ── Fault History Card ─────────────────────────────────────────────────────
   Widget _faultHistoryCard() {
+    final faultyDevices =
+        _devices.where((d) => d.status == 'ERROR' || d.status == 'UNKNOWN').toList();
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
       child: Container(
@@ -588,9 +934,9 @@ class _SolarGridScreenState extends State<SolarGridScreen> {
               width: double.infinity,
               color: const Color(0xFF0F172A),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              child: const Text(
-                'Fault History',
-                style: TextStyle(
+              child: Text(
+                'Device Faults (${faultyDevices.length})',
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 13,
                   fontWeight: FontWeight.w800,
@@ -607,14 +953,15 @@ class _SolarGridScreenState extends State<SolarGridScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: const [
                       Expanded(
+                        flex: 3,
                         child: Text(
-                          'Panel ID',
+                          'Device',
                           style: TextStyle(color: _slateLight, fontSize: 11, fontWeight: FontWeight.w700),
                         ),
                       ),
                       Expanded(
                         child: Text(
-                          'Type',
+                          'Today',
                           style: TextStyle(color: _slateLight, fontSize: 11, fontWeight: FontWeight.w700),
                         ),
                       ),
@@ -627,32 +974,34 @@ class _SolarGridScreenState extends State<SolarGridScreen> {
                   const SizedBox(height: 10),
                   const Divider(color: Color(0xFFF1F5F9), height: 1),
                   const SizedBox(height: 8),
-                  // Row 1
-                  _faultRow('P-214', 'Voltage Surge', 'Resolved', const Color(0xFFEF4444)),
-                  const SizedBox(height: 8),
-                  const Divider(color: Color(0xFFF1F5F9), height: 1),
-                  const SizedBox(height: 8),
-                  // Row 2
-                  _faultRow('P-045', 'Current Failure', 'Pending', const Color(0xFFD97706)),
-                  const SizedBox(height: 8),
-                  const Divider(color: Color(0xFFF1F5F9), height: 1),
-                  const SizedBox(height: 8),
-                  // Row 3
-                  _faultRow('P-189', 'Efficiency Drop', 'Resolved', const Color(0xFFEF4444)),
-                  const SizedBox(height: 14),
-                  // View Full Logs link
-                  GestureDetector(
-                    onTap: () {},
-                    child: const Text(
-                      'View Full Logs',
-                      style: TextStyle(
-                        color: _teal,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        decoration: TextDecoration.underline,
+                  if (faultyDevices.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 14),
+                      child: Text(
+                        'No device faults — all inverters reporting',
+                        style: TextStyle(color: _slateLight, fontSize: 11.5, fontWeight: FontWeight.w600),
                       ),
                     ),
-                  ),
+                  for (final entry in faultyDevices.take(8).toList().asMap().entries) ...[
+                    if (entry.key > 0) ...[
+                      const SizedBox(height: 8),
+                      const Divider(color: Color(0xFFF1F5F9), height: 1),
+                      const SizedBox(height: 8),
+                    ],
+                    _faultRow(
+                      entry.value.name,
+                      '${entry.value.dailyEnergyKwh.toStringAsFixed(0)} kWh',
+                      entry.value.status == 'ERROR' ? 'Error' : 'Unknown',
+                      const Color(0xFFEF4444),
+                    ),
+                  ],
+                  if (faultyDevices.length > 8) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      '+ ${faultyDevices.length - 8} more',
+                      style: const TextStyle(color: _slateLight, fontSize: 11, fontWeight: FontWeight.w600),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -669,8 +1018,10 @@ class _SolarGridScreenState extends State<SolarGridScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Expanded(
+            flex: 3,
             child: Text(
               id,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(color: _slateDark, fontSize: 11.5, fontWeight: FontWeight.w700),
             ),
           ),
@@ -735,9 +1086,8 @@ class _SolarGridScreenState extends State<SolarGridScreen> {
       (Icons.sensors_rounded, 'Telemetry'),
       (Icons.receipt_long_rounded, 'Billing'),
       (Icons.confirmation_number_outlined, 'Tickets'),
-      (Icons.person_outline_rounded, 'Profile'),
     ];
-    final routes = ['/client-dashboard', null, '/telemetry', '/billing', '/tickets', '/profile'];
+    final routes = ['/client-dashboard', null, '/telemetry', '/billing', '/tickets'];
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -807,108 +1157,4 @@ class _SolarGridScreenState extends State<SolarGridScreen> {
       child: child,
     );
   }
-}
-
-// ── Telemetry Chart Painter ──────────────────────────────────────────────────
-class _TelemetryChartPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-
-    // Voltage Curve (Solid Teal)
-    final vPts = [
-      Offset(0, h * 0.70),
-      Offset(w * 0.15, h * 0.40),
-      Offset(w * 0.35, h * 0.60),
-      Offset(w * 0.50, h * 0.20),
-      Offset(w * 0.70, h * 0.85),
-      Offset(w * 0.85, h * 0.90),
-      Offset(w, h * 0.20),
-    ];
-    final vPath = _smoothPath(vPts);
-    final vPaint = Paint()
-      ..color = const Color(0xFF2A8C6E)
-      ..strokeWidth = 2.2
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-    canvas.drawPath(vPath, vPaint);
-
-    // Current Curve (Dotted Teal)
-    final cPts = [
-      Offset(0, h * 0.80),
-      Offset(w * 0.15, h * 0.55),
-      Offset(w * 0.35, h * 0.72),
-      Offset(w * 0.50, h * 0.35),
-      Offset(w * 0.70, h * 0.95),
-      Offset(w * 0.85, h * 0.95),
-      Offset(w, h * 0.32),
-    ];
-    final cPath = _smoothPath(cPts);
-    final cPaint = Paint()
-      ..color = const Color(0xFF2A8C6E).withValues(alpha: 0.6)
-      ..strokeWidth = 1.8
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-
-    // Drawing dotted path
-    _drawDashedPath(canvas, cPath, cPaint);
-  }
-
-  void _drawDashedPath(Canvas canvas, Path path, Paint paint) {
-    const dashWidth = 4.0;
-    const dashSpace = 4.0;
-    double distance = 0.0;
-    for (final pathMetric in path.computeMetrics()) {
-      while (distance < pathMetric.length) {
-        canvas.drawPath(
-          pathMetric.extractPath(distance, distance + dashWidth),
-          paint,
-        );
-        distance += dashWidth + dashSpace;
-      }
-      distance = 0.0;
-    }
-  }
-
-  Path _smoothPath(List<Offset> pts) {
-    final path = Path();
-    path.moveTo(pts[0].dx, pts[0].dy);
-    for (int i = 0; i < pts.length - 1; i++) {
-      final cp1 = Offset((pts[i].dx + pts[i + 1].dx) / 2, pts[i].dy);
-      final cp2 = Offset((pts[i].dx + pts[i + 1].dx) / 2, pts[i + 1].dy);
-      path.cubicTo(cp1.dx, cp1.dy, cp2.dx, cp2.dy, pts[i + 1].dx, pts[i + 1].dy);
-    }
-    return path;
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter old) => false;
-}
-
-// ── Line Legend Painter ──────────────────────────────────────────────────────
-class _LineLegendPainter extends CustomPainter {
-  final bool isSolid;
-  final Color color;
-  _LineLegendPainter({required this.isSolid, required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 2.0
-      ..style = PaintingStyle.stroke;
-
-    if (isSolid) {
-      canvas.drawLine(Offset(0, size.height / 2), Offset(size.width, size.height / 2), paint);
-    } else {
-      // Dashed
-      canvas.drawLine(Offset(0, size.height / 2), Offset(4, size.height / 2), paint);
-      canvas.drawLine(Offset(8, size.height / 2), Offset(12, size.height / 2), paint);
-      canvas.drawLine(Offset(16, size.height / 2), Offset(20, size.height / 2), paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter old) => false;
 }

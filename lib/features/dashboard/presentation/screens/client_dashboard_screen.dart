@@ -3,6 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../auth/application/auth_controller.dart';
+import '../../../notifications/data/notifications_repository.dart';
+import '../../../telemetry/data/telemetry_repository.dart';
+import '../../../profile/application/profile_controller.dart';
+import '../../../../core/widgets/user_avatar.dart';
+import '../widgets/plant_map_view.dart';
 
 class ClientDashboardScreen extends ConsumerStatefulWidget {
   const ClientDashboardScreen({super.key});
@@ -15,6 +20,18 @@ class _ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
   int _selectedTimeFilter = 0;
   int _selectedNav = 0;
 
+  @override
+  void initState() {
+    super.initState();
+    // Drop any cached telemetry from a previous session/user so the dashboard
+    // always reflects the currently logged-in user's plant access.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.invalidate(telemetryDashboardProvider);
+      ref.invalidate(periodYieldProvider);
+      ref.invalidate(combinedGenerationSeriesProvider);
+    });
+  }
+
   // Premium Light Theme Design System
   static const _bg = Color(0xFFF4F6F8);
   static const _card = Colors.white;
@@ -26,6 +43,8 @@ class _ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final dashboardAsync = ref.watch(telemetryDashboardProvider);
+
     return Scaffold(
       backgroundColor: _bg,
       body: SafeArea(
@@ -33,91 +52,126 @@ class _ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
           children: [
             _topBar(),
             Expanded(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                child: Column(
-                  children: [
-                    // Header strip with greeting + stats
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
-                      color: _headerBg,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Greeting row
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              child: dashboardAsync.when(
+                loading: () => const Center(
+                  child: CircularProgressIndicator(color: _teal),
+                ),
+                error: (err, stack) => Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text(
+                        'Failed to connect to Trackso API',
+                        style: TextStyle(color: _slateDark, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 8),
+                      Text('$err', style: const TextStyle(color: _slateLight, fontSize: 12)),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(backgroundColor: _teal),
+                        onPressed: () => ref.refresh(telemetryDashboardProvider),
+                        child: const Text('Retry', style: TextStyle(color: Colors.white)),
+                      )
+                    ],
+                  ),
+                ),
+                data: (data) => RefreshIndicator(
+                  onRefresh: () async {
+                    // Refresh every dashboard data source so all cards reflect
+                    // the current user's plant access, not a stale cache.
+                    ref.invalidate(periodYieldProvider);
+                    ref.invalidate(combinedGenerationSeriesProvider);
+                    ref.invalidate(telemetryDashboardProvider);
+                    await ref.read(telemetryDashboardProvider.future);
+                  },
+                  color: _teal,
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    child: Column(
+                      children: [
+                        // Header strip with greeting + stats
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
+                          color: _headerBg,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              // Greeting row
                               Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text(
-                                    'Good morning, ${ref.watch(authControllerProvider).value?.name ?? 'User'} ',
-                                    style: const TextStyle(
-                                      color: _slateDark,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w700,
-                                    ),
+                                  Row(
+                                    children: [
+                                      Text(
+                                        'Good morning, ${ref.watch(authControllerProvider).value?.name ?? 'User'} ',
+                                        style: const TextStyle(
+                                          color: _slateDark,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      const Text(
+                                        '👋',
+                                        style: TextStyle(fontSize: 16),
+                                      ),
+                                    ],
                                   ),
-                                  const Text(
-                                    '👋',
-                                    style: TextStyle(fontSize: 16),
+                                  Container(
+                                    width: 36,
+                                    height: 36,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: _cardBorder, width: 1),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withValues(alpha: 0.03),
+                                          blurRadius: 4,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                    child: const Icon(
+                                      Icons.notifications_outlined,
+                                      color: _slateLight,
+                                      size: 20,
+                                    ),
                                   ),
                                 ],
                               ),
-                              Container(
-                                width: 36,
-                                height: 36,
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: _cardBorder, width: 1),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.03),
-                                      blurRadius: 4,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ],
-                                ),
-                                child: const Icon(
-                                  Icons.notifications_outlined,
-                                  color: _slateLight,
-                                  size: 20,
-                                ),
-                              ),
+                              const SizedBox(height: 16),
+                              // Stats cards
+                              _statsRow(data),
                             ],
                           ),
-                          const SizedBox(height: 16),
-                          // Stats cards
-                          _statsRow(),
-                        ],
-                      ),
-                    ),
+                        ),
 
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _energyChart(),
-                          const SizedBox(height: 16),
-                          _plantHealth(),
-                          const SizedBox(height: 16),
-                          _performanceRatio(),
-                          const SizedBox(height: 16),
-                          _plantLocations(),
-                          const SizedBox(height: 16),
-                          _recentAlerts(),
-                          const SizedBox(height: 16),
-                          _quickActions(),
-                          const SizedBox(height: 24),
-                          _footer(),
-                          const SizedBox(height: 12),
-                        ],
-                      ),
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _energyChart(),
+                              const SizedBox(height: 16),
+                              _plantHealth(data),
+                              const SizedBox(height: 16),
+                              _performanceRatio(data),
+                              const SizedBox(height: 16),
+                              _plantLocations(data),
+                              const SizedBox(height: 16),
+                              _recentAlerts(data),
+                              const SizedBox(height: 16),
+                              _quickActions(),
+                              const SizedBox(height: 24),
+                              _footer(),
+                              const SizedBox(height: 12),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -157,16 +211,49 @@ class _ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
             ),
           ),
           const Spacer(),
-          Container(
-            width: 32,
-            height: 32,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              image: DecorationImage(
-                image: NetworkImage('https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=80&fit=crop&q=80'),
-                fit: BoxFit.cover,
+          GestureDetector(
+            onTap: () => context.push('/notifications'),
+            child: Padding(
+              padding: const EdgeInsets.only(right: 14),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  const Icon(Icons.notifications_none_rounded, color: _slateDark, size: 23),
+                  Consumer(
+                    builder: (context, ref, _) {
+                      final unread = ref.watch(unreadNotificationsCountProvider).value ?? 0;
+                      if (unread == 0) return const SizedBox.shrink();
+                      return Positioned(
+                        right: -3,
+                        top: -3,
+                        child: Container(
+                          padding: const EdgeInsets.all(3),
+                          constraints: const BoxConstraints(minWidth: 15, minHeight: 15),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFEF4444),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Text(
+                            '$unread',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                                color: Colors.white, fontSize: 8, fontWeight: FontWeight.w800),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ],
               ),
             ),
+          ),
+          UserAvatar(
+            size: 32,
+            onTap: () {
+              // Load a fresh profile each time it's opened.
+              ref.invalidate(profileControllerProvider);
+              context.push('/profile');
+            },
           ),
         ],
       ),
@@ -174,7 +261,7 @@ class _ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
   }
 
   // ── Stats row ──────────────────────────────────────────────────────────────
-  Widget _statsRow() {
+  Widget _statsRow(TelemetryDashboardModel data) {
     return Row(
       children: [
         // Live kW card — yellow gradient
@@ -233,9 +320,9 @@ class _ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
                   crossAxisAlignment: CrossAxisAlignment.baseline,
                   textBaseline: TextBaseline.alphabetic,
                   children: [
-                    const Text(
-                      '148.5',
-                      style: TextStyle(
+                    Text(
+                      data.totalPower.toStringAsFixed(1),
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 28,
                         fontWeight: FontWeight.w800,
@@ -323,38 +410,74 @@ class _ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
-                  children: const [
-                    Text(
-                      '856.9',
-                      style: TextStyle(
-                        color: _slateDark,
-                        fontSize: 28,
-                        fontWeight: FontWeight.w800,
-                        height: 1,
-                      ),
-                    ),
-                    SizedBox(width: 4),
-                    Text(
-                      'kWh',
-                      style: TextStyle(
-                        color: _slateLight,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                const Text(
-                  "Today's Generation",
-                  style: TextStyle(
-                    color: _slateLight,
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w500,
-                  ),
+                Consumer(
+                  builder: (context, ref, _) {
+                    final yieldAsync = ref.watch(periodYieldProvider);
+                    // Pick the value for the selected filter (fall back to today's
+                    // yield from the dashboard while the period data loads).
+                    double kwh = data.todayYield;
+                    final py = yieldAsync.value;
+                    if (py != null) {
+                      kwh = [py.day, py.week, py.month, py.year][_selectedTimeFilter];
+                    }
+                    const labels = [
+                      "Today's Generation",
+                      "This Week's Generation",
+                      "This Month's Generation",
+                      "This Year's Generation",
+                    ];
+                    // Show MWh for large numbers so the card doesn't overflow.
+                    final bool asMwh = kwh >= 10000;
+                    final String valueStr =
+                        asMwh ? (kwh / 1000).toStringAsFixed(1) : kwh.toStringAsFixed(1);
+                    final String unit = asMwh ? 'MWh' : 'kWh';
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.baseline,
+                          textBaseline: TextBaseline.alphabetic,
+                          children: [
+                            Text(
+                              valueStr,
+                              style: const TextStyle(
+                                color: _slateDark,
+                                fontSize: 28,
+                                fontWeight: FontWeight.w800,
+                                height: 1,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              unit,
+                              style: const TextStyle(
+                                color: _slateLight,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            if (yieldAsync.isLoading) ...[
+                              const SizedBox(width: 8),
+                              const SizedBox(
+                                width: 10,
+                                height: 10,
+                                child: CircularProgressIndicator(strokeWidth: 1.6, color: _teal),
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          labels[_selectedTimeFilter],
+                          style: const TextStyle(
+                            color: _slateLight,
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ],
             ),
@@ -366,7 +489,7 @@ class _ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
 
   // ── Energy generation chart ────────────────────────────────────────────────
   Widget _energyChart() {
-    return _card_(
+    return _buildCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -406,24 +529,68 @@ class _ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
             ],
           ),
           const SizedBox(height: 18),
-          SizedBox(
-            height: 100,
-            width: double.infinity,
-            child: CustomPaint(painter: _ChartPainter(color: _teal)),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: ['6am', '9am', '12pm', '3pm', '6pm']
-                .map((t) => Text(
-                      t,
-                      style: const TextStyle(
-                        color: _slateLight,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w500,
+          Consumer(
+            builder: (context, ref, _) {
+              final seriesAsync = ref.watch(combinedGenerationSeriesProvider);
+              return seriesAsync.when(
+                loading: () => const SizedBox(
+                  height: 100,
+                  child: Center(child: CircularProgressIndicator(color: _teal, strokeWidth: 2)),
+                ),
+                error: (e, _) => SizedBox(
+                  height: 100,
+                  child: Center(
+                    child: Text('Chart unavailable: $e',
+                        style: const TextStyle(color: _slateLight, fontSize: 10)),
+                  ),
+                ),
+                data: (series) {
+                  if (series.length < 2) {
+                    return const SizedBox(
+                      height: 100,
+                      child: Center(
+                        child: Text('Collecting live data…',
+                            style: TextStyle(color: _slateLight, fontSize: 11)),
                       ),
-                    ))
-                .toList(),
+                    );
+                  }
+                  const labelCount = 5;
+                  final labels = List.generate(labelCount, (i) {
+                    final idx = (i * (series.length - 1) / (labelCount - 1)).round();
+                    final t = series[idx].timestamp;
+                    return '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+                  });
+                  return Column(
+                    children: [
+                      SizedBox(
+                        height: 100,
+                        width: double.infinity,
+                        child: CustomPaint(
+                          painter: _ChartPainter(
+                            color: _teal,
+                            values: series.map((p) => p.totalGeneration).toList(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: labels
+                            .map((t) => Text(
+                                  t,
+                                  style: const TextStyle(
+                                    color: _slateLight,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ))
+                            .toList(),
+                      ),
+                    ],
+                  );
+                },
+              );
+            },
           ),
         ],
       ),
@@ -431,13 +598,9 @@ class _ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
   }
 
   // ── Plant health ───────────────────────────────────────────────────────────
-  Widget _plantHealth() {
-    final plants = [
-      ('Morwad, Rajasthan', 'Healthy', const Color(0xFF2DB584)),
-      ('Pune Tech Park', 'Attention', const Color(0xFFF5A623)),
-      ('Thane Industrial', 'Critical', const Color(0xFFEF4444)),
-    ];
-    return _card_(
+  Widget _plantHealth(TelemetryDashboardModel data) {
+    final plants = data.plants.values.toList();
+    return _buildCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -450,76 +613,102 @@ class _ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
             ),
           ),
           const SizedBox(height: 14),
-          ...plants.asMap().entries.map((entry) {
-            final idx = entry.key;
-            final p = entry.value;
-            return Column(
-              children: [
-                if (idx > 0)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 10),
-                    child: Divider(color: Color(0xFFF1F5F9), height: 1),
-                  ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 2),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: p.$3,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: p.$3.withValues(alpha: 0.4),
-                              blurRadius: 4,
-                              spreadRadius: 1,
+          if (plants.isEmpty)
+            const Text('No active solar plants.', style: TextStyle(color: _slateLight, fontSize: 12))
+          else
+            ...plants.asMap().entries.map((entry) {
+              final idx = entry.key;
+              final p = entry.value;
+              
+              Color statusColor = const Color(0xFF2DB584); // green
+              if (p.status.toLowerCase() == 'attention' || p.status.toLowerCase() == 'warning') {
+                statusColor = const Color(0xFFF5A623);
+              } else if (p.status.toLowerCase() == 'critical' || p.status.toLowerCase() == 'fault') {
+                statusColor = const Color(0xFFEF4444);
+              }
+
+              return Column(
+                children: [
+                  if (idx > 0)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 10),
+                      child: Divider(color: Color(0xFFF1F5F9), height: 1),
+                    ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: statusColor,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: statusColor.withValues(alpha: 0.4),
+                                blurRadius: 4,
+                                spreadRadius: 1,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                p.siteName,
+                                style: const TextStyle(
+                                  color: _slateDark,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Live: ${p.livePower.toStringAsFixed(1)} kW | Today: ${p.dailyEnergy.toStringAsFixed(0)} kWh',
+                                style: const TextStyle(
+                                  color: _slateLight,
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 9, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: statusColor.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            p.status,
+                            style: TextStyle(
+                              color: statusColor,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
                             ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          p.$1,
-                          style: const TextStyle(
-                            color: _slateDark,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 9, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: p.$3.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          p.$2,
-                          style: TextStyle(
-                            color: p.$3,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            );
-          }),
+                ],
+              );
+            }),
         ],
       ),
     );
   }
 
   // ── Performance ratio ──────────────────────────────────────────────────────
-  Widget _performanceRatio() {
-    return _card_(
+  Widget _performanceRatio(TelemetryDashboardModel data) {
+    final prValue = data.performanceRatio / 100.0;
+    return _buildCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -538,24 +727,24 @@ class _ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
               height: 120,
               child: CustomPaint(
                 painter: _GaugePainter(
-                  value: 0.82,
+                  value: prValue,
                   trackColor: const Color(0xFFF1F5F9),
                   fillColor: _teal,
                 ),
-                child: const Center(
+                child: Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        '82%',
-                        style: TextStyle(
+                        '${data.performanceRatio.toStringAsFixed(0)}%',
+                        style: const TextStyle(
                           color: _slateDark,
                           fontSize: 26,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
-                      Text(
-                        'PR',
+                      const Text(
+                        'CUF / PR',
                         style: TextStyle(
                           color: _slateLight,
                           fontSize: 11,
@@ -571,7 +760,7 @@ class _ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
           const SizedBox(height: 16),
           const Center(
             child: Text(
-              'Your plants are performing 2% better than last month',
+              'Your plants performance metrics are synchronized live from Trackso.',
               style: TextStyle(
                 color: _slateLight,
                 fontSize: 11.5,
@@ -587,62 +776,61 @@ class _ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
   }
 
   // ── Plant locations ────────────────────────────────────────────────────────
-  Widget _plantLocations() {
-    return _card_(
+  Widget _plantLocations(TelemetryDashboardModel data) {
+    // Build map sites from the user's accessible plants (real coordinates).
+    final sites = <PlantSite>[];
+    for (final p in data.plants.values) {
+      final pos = plantCoordinatesFor(p.siteName);
+      if (pos == null) continue;
+      sites.add(PlantSite(
+        name: p.siteName,
+        position: pos,
+        active: p.status.toLowerCase() == 'active',
+      ));
+    }
+
+    return _buildCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Plant Locations',
-            style: TextStyle(
-              color: _slateDark,
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Sites Map View',
+                style: TextStyle(color: _slateDark, fontSize: 14, fontWeight: FontWeight.w700),
+              ),
+              const Icon(Icons.satellite_alt_rounded, color: _slateLight, size: 18),
+            ],
           ),
           const SizedBox(height: 14),
-          LayoutBuilder(builder: (ctx, c) {
-            final mapW = c.maxWidth;
-            const mapH = 190.0;
-            return SizedBox(
-              width: mapW,
-              height: mapH,
-              child: Stack(
-                children: [
-                  // Premium soft background
-                  Container(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: _cardBorder, width: 0.8),
-                    ),
-                  ),
-                  // India map centred
-                  Positioned.fill(
-                    child: CustomPaint(
-                      painter: _IndiaMapPainter(),
-                    ),
-                  ),
-                  // Rajasthan — top-left area
-                  _marker(mapW, mapH, 0.32, 0.28, const Color(0xFF2DB584)),
-                  // Pune — centre-right
-                  _marker(mapW, mapH, 0.53, 0.62, const Color(0xFFF5A623)),
-                  // Thane — near Pune
-                  _marker(mapW, mapH, 0.51, 0.56, const Color(0xFFEF4444)),
-                ],
+          if (sites.isEmpty)
+            Container(
+              height: 120,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: _cardBorder, width: 0.8),
               ),
-            );
-          }),
-          const SizedBox(height: 12),
-          // Legend
-          Row(
+              child: const Text('No site locations available',
+                  style: TextStyle(color: _slateLight, fontSize: 12)),
+            )
+          else
+            PlantMapPreview(
+              sites: sites,
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => PlantMapFullScreen(sites: sites)),
+              ),
+            ),
+          const SizedBox(height: 10),
+          const Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _legendDot(const Color(0xFF2DB584), 'Morwad'),
-              const SizedBox(width: 16),
-              _legendDot(const Color(0xFFF5A623), 'Pune'),
-              const SizedBox(width: 16),
-              _legendDot(const Color(0xFFEF4444), 'Thane'),
+              Icon(Icons.touch_app_rounded, size: 13, color: _slateLight),
+              SizedBox(width: 5),
+              Text('Tap the map to explore & zoom',
+                  style: TextStyle(color: _slateLight, fontSize: 11, fontWeight: FontWeight.w500)),
             ],
           ),
         ],
@@ -650,76 +838,10 @@ class _ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
     );
   }
 
-  Widget _legendDot(Color color, String label) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 6),
-        Text(
-          label,
-          style: const TextStyle(
-            color: _slateLight,
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _marker(
-      double w, double h, double rx, double ry, Color color) {
-    return Positioned(
-      left: w * rx,
-      top: h * ry,
-      child: Container(
-        width: 12,
-        height: 12,
-        decoration: BoxDecoration(
-          color: color,
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.white, width: 2),
-          boxShadow: [
-            BoxShadow(
-              color: color.withValues(alpha: 0.4),
-              blurRadius: 6,
-              spreadRadius: 2,
-            )
-          ],
-        ),
-      ),
-    );
-  }
 
   // ── Recent alerts ──────────────────────────────────────────────────────────
-  Widget _recentAlerts() {
-    final alerts = [
-      (
-        const Color(0xFFEF4444),
-        Icons.flash_off_rounded,
-        'Main Inverter Failure',
-        'Morwad, Rajasthan • 2h ago'
-      ),
-      (
-        const Color(0xFFF5A623),
-        Icons.trending_down_rounded,
-        'Low Generation Alert',
-        'Pune Tech Park • 5h ago'
-      ),
-      (
-        _teal,
-        Icons.build_circle_outlined,
-        'Maintenance Scheduled',
-        'Thane Industrial • Tomorrow'
-      ),
-    ];
-
-    return _card_(
+  Widget _recentAlerts(TelemetryDashboardModel data) {
+    return _buildCard(
       child: Column(
         children: [
           Row(
@@ -747,15 +869,29 @@ class _ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
             ],
           ),
           const SizedBox(height: 14),
-          ...alerts.map((a) => Container(
+          if (data.alerts.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8.0),
+              child: Text('No recent system alerts.', style: TextStyle(color: _slateLight, fontSize: 12)),
+            )
+          else
+            ...data.alerts.map((a) {
+              Color alertColor = _teal;
+              IconData icon = Icons.info_outline;
+              if (a.type == 'WARNING' || a.type == 'CRITICAL') {
+                alertColor = a.type == 'CRITICAL' ? const Color(0xFFEF4444) : const Color(0xFFF5A623);
+                icon = a.type == 'CRITICAL' ? Icons.flash_off_rounded : Icons.trending_down_rounded;
+              }
+
+              return Container(
                 margin: const EdgeInsets.only(bottom: 10),
                 padding: const EdgeInsets.symmetric(
                     horizontal: 14, vertical: 12),
                 decoration: BoxDecoration(
-                  color: a.$1.withValues(alpha: 0.05),
+                  color: alertColor.withValues(alpha: 0.05),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                      color: a.$1.withValues(alpha: 0.15), width: 1),
+                      color: alertColor.withValues(alpha: 0.15), width: 1),
                 ),
                 child: Row(
                   children: [
@@ -763,10 +899,10 @@ class _ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
                       width: 38,
                       height: 38,
                       decoration: BoxDecoration(
-                        color: a.$1.withValues(alpha: 0.12),
+                        color: alertColor.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: Icon(a.$2, color: a.$1, size: 18),
+                      child: Icon(icon, color: alertColor, size: 18),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -774,16 +910,16 @@ class _ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            a.$3,
+                            a.title,
                             style: TextStyle(
-                              color: a.$1,
+                              color: alertColor,
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
                           const SizedBox(height: 3),
                           Text(
-                            a.$4,
+                            '${a.location} • ${a.time}',
                             style: const TextStyle(
                               color: _slateLight,
                               fontSize: 10.5,
@@ -795,16 +931,18 @@ class _ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
                     ),
                     Icon(
                       Icons.arrow_forward_ios_rounded,
-                      color: a.$1.withValues(alpha: 0.5),
+                      color: alertColor.withValues(alpha: 0.5),
                       size: 12,
                     ),
                   ],
                 ),
-              )),
+              );
+            }),
         ],
       ),
     );
   }
+
 
   // ── Quick actions ──────────────────────────────────────────────────────────
   Widget _quickActions() {
@@ -814,7 +952,7 @@ class _ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
       (Icons.bar_chart_rounded, 'Reports', '/telemetry'),
       (Icons.shopping_bag_outlined, 'Shop', '/marketplace'),
     ];
-    return _card_(
+    return _buildCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -913,9 +1051,8 @@ class _ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
       (Icons.sensors_rounded, 'Telemetry'),
       (Icons.receipt_long_rounded, 'Billing'),
       (Icons.confirmation_number_outlined, 'Tickets'),
-      (Icons.person_outline_rounded, 'Profile'),
     ];
-    final routes = [null, '/solar-grid', '/telemetry', '/billing', '/tickets', '/profile'];
+    final routes = [null, '/solar-grid', '/telemetry', '/billing', '/tickets'];
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -930,10 +1067,9 @@ class _ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
           final active = _selectedNav == i;
           return GestureDetector(
             onTap: () {
+              setState(() => _selectedNav = i);
               if (routes[i] != null) {
                 context.push(routes[i]!);
-              } else {
-                setState(() => _selectedNav = i);
               }
             },
             child: Container(
@@ -965,8 +1101,9 @@ class _ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
     );
   }
 
+
   // ── Card helper ────────────────────────────────────────────────────────────
-  Widget _card_({required Widget child}) {
+  Widget _buildCard({required Widget child}) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -990,22 +1127,21 @@ class _ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
 // ── Smooth line chart painter ─────────────────────────────────────────────────
 class _ChartPainter extends CustomPainter {
   final Color color;
-  _ChartPainter({required this.color});
+  final List<double> values;
+  _ChartPainter({required this.color, required this.values});
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Bell-curve like solar generation (0 at edges, peak midday)
-    final pts = [
-      Offset(0, size.height),
-      Offset(size.width * 0.1, size.height * 0.88),
-      Offset(size.width * 0.2, size.height * 0.60),
-      Offset(size.width * 0.35, size.height * 0.22),
-      Offset(size.width * 0.5, size.height * 0.08),
-      Offset(size.width * 0.65, size.height * 0.18),
-      Offset(size.width * 0.8, size.height * 0.55),
-      Offset(size.width * 0.9, size.height * 0.85),
-      Offset(size.width, size.height),
-    ];
+    if (values.length < 2) return;
+    final maxV = values.reduce(math.max);
+    final range = maxV <= 0 ? 1.0 : maxV;
+    final pts = <Offset>[];
+    for (int i = 0; i < values.length; i++) {
+      final x = size.width * i / (values.length - 1);
+      // Baseline at the bottom, peak at 8% from the top
+      final y = size.height * (1.0 - 0.92 * (values[i] / range).clamp(0.0, 1.0));
+      pts.add(Offset(x, y));
+    }
 
     final linePath = _smoothPath(pts);
 
@@ -1064,7 +1200,7 @@ class _ChartPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter old) => false;
+  bool shouldRepaint(covariant _ChartPainter old) => old.values != values;
 }
 
 // ── Arc gauge painter ─────────────────────────────────────────────────────────
@@ -1101,98 +1237,6 @@ class _GaugePainter extends CustomPainter {
           ..strokeWidth = 10
           ..style = PaintingStyle.stroke
           ..strokeCap = StrokeCap.round);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter old) => false;
-}
-
-// ── India map painter ─────────────────────────────────────────────────────────
-class _IndiaMapPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-
-    // ── Accurate India silhouette (normalised 0–1 coordinates) ──
-    // Derived from real GeoJSON, simplified to ~60 points
-    final raw = [
-      // J&K / top-left
-      [0.28, 0.00], [0.33, 0.00], [0.40, 0.02], [0.43, 0.05],
-      // Pakistan border going right
-      [0.46, 0.04], [0.50, 0.02], [0.54, 0.03], [0.57, 0.06],
-      // Himachal / Uttarakhand
-      [0.60, 0.08], [0.65, 0.09], [0.68, 0.12],
-      // Nepal / Bihar border
-      [0.72, 0.13], [0.76, 0.15], [0.80, 0.17],
-      // NE states bump
-      [0.84, 0.18], [0.88, 0.20], [0.90, 0.24], [0.89, 0.28],
-      [0.86, 0.30], [0.84, 0.33], [0.88, 0.35], [0.90, 0.38],
-      [0.88, 0.42], [0.84, 0.43],
-      // Bangladesh / West Bengal
-      [0.82, 0.40], [0.80, 0.42], [0.78, 0.46],
-      // Odisha coast going south
-      [0.79, 0.50], [0.78, 0.55], [0.76, 0.60],
-      // Andhra coast
-      [0.74, 0.65], [0.72, 0.70], [0.70, 0.75],
-      // Tamil Nadu south-east
-      [0.68, 0.80], [0.65, 0.86], [0.62, 0.90], [0.60, 0.94],
-      // Tip of India (Kanyakumari)
-      [0.57, 0.98], [0.54, 1.00], [0.51, 0.98],
-      // Kerala west coast going north
-      [0.48, 0.93], [0.45, 0.87], [0.43, 0.81],
-      // Karnataka / Goa
-      [0.40, 0.75], [0.37, 0.70], [0.34, 0.65],
-      // Maharashtra coast
-      [0.31, 0.60], [0.28, 0.55], [0.26, 0.50],
-      // Gujarat coast
-      [0.22, 0.46], [0.18, 0.43], [0.14, 0.40],
-      [0.10, 0.38], [0.08, 0.34],
-      // Kutch peninsula
-      [0.06, 0.30], [0.08, 0.26], [0.12, 0.24],
-      [0.16, 0.22], [0.14, 0.18],
-      // Rajasthan border going north
-      [0.16, 0.14], [0.20, 0.10], [0.24, 0.06],
-      [0.28, 0.03], [0.28, 0.00],
-    ];
-
-    final path = Path();
-    for (int i = 0; i < raw.length; i++) {
-      final x = w * raw[i][0];
-      final y = h * raw[i][1];
-      if (i == 0) {
-        path.moveTo(x, y);
-      } else {
-        path.lineTo(x, y);
-      }
-    }
-    path.close();
-
-    // Fill — beautiful soft slate-blue map color
-    canvas.drawPath(
-        path,
-        Paint()
-          ..color = const Color(0xFFCBD5E1)
-          ..style = PaintingStyle.fill);
-    // Subtle border
-    canvas.drawPath(
-        path,
-        Paint()
-          ..color = Colors.white
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.0);
-
-    // Sri Lanka
-    final sl = Path();
-    sl.addOval(Rect.fromCenter(
-        center: Offset(w * 0.60, h * 1.02),
-        width: w * 0.04,
-        height: h * 0.05));
-    canvas.drawPath(
-        sl,
-        Paint()
-          ..color = const Color(0xFFCBD5E1)
-          ..style = PaintingStyle.fill);
   }
 
   @override

@@ -5,6 +5,7 @@ export interface IPlantRepository {
   findById(id: string): Promise<PlantEntity | null>;
   findAll(): Promise<PlantEntity[]>;
   findAllByOwnerId(ownerId: string): Promise<PlantEntity[]>;
+  findByIds(ids: string[]): Promise<PlantEntity[]>;
   create(plant: Partial<PlantEntity>): Promise<PlantEntity>;
   update(id: string, plant: Partial<PlantEntity>): Promise<PlantEntity>;
   delete(id: string): Promise<boolean>;

@@ -5,7 +5,7 @@ import '../../auth/data/auth_repository.dart';
 import '../domain/plant_model.dart';
 
 final plantsRepositoryProvider = Provider<PlantsRepository>((ref) {
-  final authRepository = ref.read(authRepositoryProvider) as HttpAuthRepository;
+  final authRepository = ref.read(authRepositoryProvider);
   return PlantsRepository(authRepository);
 });
 
@@ -14,12 +14,12 @@ final plantsFutureProvider = FutureProvider<List<PlantModel>>((ref) async {
 });
 
 class PlantsRepository {
-  final HttpAuthRepository _authRepository;
+  final AuthRepository _authRepository;
 
   PlantsRepository(this._authRepository);
 
   Map<String, String> get _headers {
-    final token = HttpAuthRepository.token;
+    final token = _authRepository.token;
     return {
       'Content-Type': 'application/json',
       if (token != null) 'Authorization': 'Bearer $token',
@@ -28,7 +28,7 @@ class PlantsRepository {
 
   Future<List<PlantModel>> getPlants() async {
     final response = await httpGet(
-      Uri.parse('${_authRepository.baseUrl}/solar-plants'),
+      Uri.parse('${_authRepository.baseUrl}/plants'),
       headers: _headers,
     );
 
@@ -37,6 +37,20 @@ class PlantsRepository {
       return data.map((json) => PlantModel.fromJson(json)).toList();
     } else {
       throw Exception('Failed to fetch plants: ${response.statusCode}');
+    }
+  }
+
+  Future<List<PanelModel>> getPanels(String plantId) async {
+    final response = await httpGet(
+      Uri.parse('${_authRepository.baseUrl}/plants/$plantId/panels'),
+      headers: _headers,
+    );
+
+    if (response.statusCode == 200) {
+      final List<dynamic> data = jsonDecode(response.body);
+      return data.map((json) => PanelModel.fromJson(json)).toList();
+    } else {
+      throw Exception('Failed to fetch panels: ${response.statusCode}');
     }
   }
 }

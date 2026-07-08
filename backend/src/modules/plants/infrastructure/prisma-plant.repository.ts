@@ -52,6 +52,12 @@ export class PrismaPlantRepository implements IPlantRepository {
     return plants.map(p => this.mapPlantToEntity(p));
   }
 
+  async findByIds(ids: string[]): Promise<PlantEntity[]> {
+    if (ids.length === 0) return [];
+    const plants = await this.prisma.plant.findMany({ where: { id: { in: ids } } });
+    return plants.map(p => this.mapPlantToEntity(p));
+  }
+
   async create(plant: Partial<PlantEntity>): Promise<PlantEntity> {
     const created = await this.prisma.plant.create({
       data: {

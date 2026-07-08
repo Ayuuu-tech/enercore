@@ -17,27 +17,30 @@ import { RolesGuard } from '../../../common/guards/roles.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { UserEntity } from '../../users/domain/user.entity';
 import { Role } from '@prisma/client';
+import { PlantAccessService } from '../../../common/access/plant-access.service';
 
 @Controller('plants')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class PlantsController {
-  constructor(private readonly plantsService: PlantsService) {}
+  constructor(
+    private readonly plantsService: PlantsService,
+    private readonly plantAccess: PlantAccessService,
+  ) {}
 
   @Get()
   async findAll(@CurrentUser() user: UserEntity) {
     if (user.role === Role.ADMIN) {
       return this.plantsService.findAll();
     }
-    return this.plantsService.findAllByOwner(user.id);
+    // Only plants the user owns or has been granted access to.
+    const ids = await this.plantAccess.getAccessiblePlantIds(user);
+    return this.plantsService.findByIds(ids);
   }
 
   @Get(':id')
   async findOne(@Param('id') id: string, @CurrentUser() user: UserEntity) {
-    const plant = await this.plantsService.findById(id);
-    if (user.role !== Role.ADMIN && plant.ownerId !== user.id) {
-      throw new ForbiddenException('You do not own this power plant');
-    }
-    return plant;
+    await this.plantAccess.assertPlantAccess(user, id);
+    return this.plantsService.findById(id);
   }
 
   @Post()
@@ -55,6 +58,7 @@ export class PlantsController {
     @Body() dto: Partial<CreatePlantDto>,
     @CurrentUser() user: UserEntity,
   ) {
+    // Editing a plant requires ownership or admin (not just view access).
     const plant = await this.plantsService.findById(id);
     if (user.role !== Role.ADMIN && plant.ownerId !== user.id) {
       throw new ForbiddenException('You do not own this power plant');
@@ -74,10 +78,7 @@ export class PlantsController {
   // Panel endpoints
   @Get(':id/panels')
   async findPanels(@Param('id') id: string, @CurrentUser() user: UserEntity) {
-    const plant = await this.plantsService.findById(id);
-    if (user.role !== Role.ADMIN && plant.ownerId !== user.id) {
-      throw new ForbiddenException('You do not own this power plant');
-    }
+    await this.plantAccess.assertPlantAccess(user, id);
     return this.plantsService.findPanelsByPlant(id);
   }
 

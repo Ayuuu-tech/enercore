@@ -1,36 +1,27 @@
 import 'dart:convert';
+import 'package:cross_file/cross_file.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
-import 'dart:io' show Platform;
-import 'package:flutter/foundation.dart' show kIsWeb;
 import '../../../core/http/http_helper.dart';
 import '../../auth/domain/user_model.dart';
 import '../../auth/data/auth_repository.dart';
 
 final profileRepositoryProvider = Provider<ProfileRepository>((ref) {
-  return ProfileRepository();
+  final authRepository = ref.read(authRepositoryProvider);
+  return ProfileRepository(authRepository);
 });
 
 class ProfileRepository {
-  String get baseUrl {
-    if (HttpAuthRepository.customUrl != null && HttpAuthRepository.customUrl!.isNotEmpty) {
-      return HttpAuthRepository.customUrl!;
-    }
-    if (kIsWeb) {
-      return 'http://localhost:3000/api';
-    }
-    try {
-      if (Platform.isAndroid) {
-        return 'http://192.168.1.19:3000/api';
-      }
-    } catch (_) {}
-    return 'http://localhost:3000/api';
-  }
+  final AuthRepository _authRepository;
+
+  ProfileRepository(this._authRepository);
+
+  String get baseUrl => _authRepository.baseUrl;
 
   Map<String, String> get _headers => {
     'Content-Type': 'application/json',
-    if (HttpAuthRepository.token != null)
-      'Authorization': 'Bearer ${HttpAuthRepository.token}',
+    if (_authRepository.token != null)
+      'Authorization': 'Bearer ${_authRepository.token}',
   };
 
   Future<UserModel> getProfile() async {
@@ -70,11 +61,15 @@ class ProfileRepository {
     }
   }
 
-  Future<UserModel> uploadAvatar(String userId, String filePath) async {
+  Future<UserModel> uploadAvatar(String userId, XFile file) async {
     final uri = Uri.parse('$baseUrl/users/$userId/avatar');
     final request = http.MultipartRequest('POST', uri);
-    request.headers['Authorization'] = 'Bearer ${HttpAuthRepository.token}';
-    request.files.add(await http.MultipartFile.fromPath('avatar', filePath));
+    request.headers['Authorization'] = 'Bearer ${_authRepository.token}';
+    final bytes = await file.readAsBytes();
+    request.files.add(http.MultipartFile.fromBytes(
+      'avatar', bytes,
+      filename: file.name,
+    ));
     final streamed = await request.send();
     final response = await http.Response.fromStream(streamed).timeout(httpTimeout);
 

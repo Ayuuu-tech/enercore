@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../domain/ticket_model.dart';
 import '../data/ticketing_repository.dart';
@@ -28,8 +29,8 @@ class TicketingController extends AsyncNotifier<List<TicketModel>> {
     try {
       final tickets = await ref.read(ticketingRepositoryProvider).getTickets();
       state = AsyncValue.data(tickets);
-    } catch (_) {
-      // Fail silently during background polling to avoid disturbing active UI
+    } catch (e) {
+      debugPrint('[TicketingController] Background poll failed: $e');
     }
   }
 

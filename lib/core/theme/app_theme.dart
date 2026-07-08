@@ -1,9 +1,20 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 class AppTheme {
+  // Smooth iOS-style page transitions on every platform for an Apple-like feel.
+  static const _transitions = PageTransitionsTheme(builders: {
+    TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+    TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+    TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+    TargetPlatform.windows: CupertinoPageTransitionsBuilder(),
+    TargetPlatform.linux: CupertinoPageTransitionsBuilder(),
+  });
+
   static ThemeData get lightTheme {
     return ThemeData(
       useMaterial3: true,
+      pageTransitionsTheme: _transitions,
       colorScheme: ColorScheme.fromSeed(
         seedColor: const Color(0xFF0F4C81),
         brightness: Brightness.light,
@@ -29,6 +40,7 @@ class AppTheme {
   static ThemeData get darkTheme {
     return ThemeData(
       useMaterial3: true,
+      pageTransitionsTheme: _transitions,
       colorScheme: ColorScheme.fromSeed(
         seedColor: const Color(0xFF0F4C81),
         brightness: Brightness.dark,

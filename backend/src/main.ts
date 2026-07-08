@@ -1,6 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter';
 import * as express from 'express';
 import { join } from 'path';
@@ -32,6 +32,6 @@ async function bootstrap() {
 
   const port = process.env.PORT || 3000;
   await app.listen(port, '0.0.0.0');
-  console.log(`Enercore Backend is running on: http://localhost:${port}/api`);
+  Logger.log(`Enercore backend running on http://localhost:${port}/api`, 'Bootstrap');
 }
 bootstrap();

@@ -17,6 +17,12 @@ export class VendorsController {
     return this.vendorsService.findAll();
   }
 
+  @Get('stats')
+  @Roles(Role.VENDOR)
+  async getStats(@CurrentUser() user: UserEntity) {
+    return this.vendorsService.getStats(user.id);
+  }
+
   @Get(':id')
   async findOne(@Param('id') id: string) {
     return this.vendorsService.findById(id);

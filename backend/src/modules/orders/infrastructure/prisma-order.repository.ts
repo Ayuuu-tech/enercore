@@ -55,6 +55,15 @@ export class PrismaOrderRepository implements IOrderRepository {
     return orders.map(o => this.mapToEntity(o));
   }
 
+  async findAllByVendorId(vendorId: string): Promise<OrderEntity[]> {
+    const orders = await this.prisma.order.findMany({
+      where: { items: { some: { product: { vendorId } } } },
+      include: { items: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    return orders.map(o => this.mapToEntity(o));
+  }
+
   async create(userId: string, items: { productId: string; quantity: number }[]): Promise<OrderEntity> {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
     const orderNumber = `ORD-${uniqueSuffix}`;

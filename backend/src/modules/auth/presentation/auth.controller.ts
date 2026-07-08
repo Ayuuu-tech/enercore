@@ -2,9 +2,11 @@ import { Body, Controller, Post, Put, HttpCode, HttpStatus, UseGuards } from '@n
 import { AuthService } from '../application/auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { Public } from '../../../common/decorators/public.decorator';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
+import { ThrottleGuard } from '../../../common/guards/throttle.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { UserEntity } from '../../../modules/users/domain/user.entity';
 
@@ -20,9 +22,17 @@ export class AuthController {
 
   @Public()
   @HttpCode(HttpStatus.OK)
+  @UseGuards(ThrottleGuard)
   @Post('login')
   async login(@Body() loginDto: LoginDto) {
     return this.authService.login(loginDto);
+  }
+
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @Post('forgot-password')
+  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(dto.email);
   }
 
   @UseGuards(JwtAuthGuard)

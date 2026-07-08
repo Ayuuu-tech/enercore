@@ -27,6 +27,9 @@ export class OrdersController {
     if (user.role === Role.ADMIN) {
       return this.ordersService.findAll();
     }
+    if (user.role === Role.VENDOR) {
+      return this.ordersService.findAllByVendor(user.id);
+    }
     return this.ordersService.findAllByUser(user.id);
   }
 

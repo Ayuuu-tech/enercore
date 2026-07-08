@@ -18,12 +18,12 @@ export class BillingService {
     return invoice;
   }
 
-  async findAll(): Promise<InvoiceEntity[]> {
-    return this.invoiceRepository.findAll();
+  async findAll(page = 1, limit = 100): Promise<InvoiceEntity[]> {
+    return this.invoiceRepository.findAll(page, limit);
   }
 
-  async findAllByUser(userId: string): Promise<InvoiceEntity[]> {
-    return this.invoiceRepository.findAllByUserId(userId);
+  async findAllByUser(userId: string, page = 1, limit = 100): Promise<InvoiceEntity[]> {
+    return this.invoiceRepository.findAllByUserId(userId, page, limit);
   }
 
   async create(dto: Partial<InvoiceEntity>): Promise<InvoiceEntity> {

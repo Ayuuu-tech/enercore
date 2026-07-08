@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../application/auth_controller.dart';
 
-class SplashScreen extends StatefulWidget {
+class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  ConsumerState<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen>
+class _SplashScreenState extends ConsumerState<SplashScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _fadeAnim;
@@ -25,10 +27,32 @@ class _SplashScreenState extends State<SplashScreen>
         CurvedAnimation(parent: _controller, curve: Curves.easeOutBack));
     _controller.forward();
 
-    // Skip onboarding — go straight to role selection
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) context.go('/role-selection');
-    });
+    _decideNextRoute();
+  }
+
+  // Wait for the branding animation and the startup session-restore to finish,
+  // then route: a restored user goes straight to their dashboard, everyone
+  // else to role selection.
+  Future<void> _decideNextRoute() async {
+    await Future.delayed(const Duration(seconds: 2));
+    while (mounted && ref.read(authControllerProvider).isLoading) {
+      await Future.delayed(const Duration(milliseconds: 100));
+    }
+    if (!mounted) return;
+
+    final user = ref.read(authControllerProvider).asData?.value;
+    if (user == null) {
+      context.go('/role-selection');
+    } else {
+      final role = user.role.toUpperCase();
+      if (role == 'ADMIN') {
+        context.go('/admin-dashboard');
+      } else if (role == 'VENDOR') {
+        context.go('/vendor-dashboard');
+      } else {
+        context.go('/client-dashboard');
+      }
+    }
   }
 
   @override

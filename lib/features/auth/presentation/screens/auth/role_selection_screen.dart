@@ -138,6 +138,20 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen>
                           onTap: () =>
                               setState(() => _selectedRole = 'vendor'),
                         ),
+                        const SizedBox(height: 14),
+
+                        // ── Admin card ────────────────────────────────
+                        _RoleCard(
+                          role: 'admin',
+                          selectedRole: _selectedRole,
+                          icon: Icons.admin_panel_settings_outlined,
+                          title: 'Administrator',
+                          subtitle:
+                              'Manage users, plants, subscriptions & access',
+                          teal: _teal,
+                          onTap: () =>
+                              setState(() => _selectedRole = 'admin'),
+                        ),
                         const SizedBox(height: 28),
 
                         // ── Continue button ───────────────────────────

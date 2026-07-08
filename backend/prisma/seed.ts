@@ -78,11 +78,12 @@ async function main() {
   console.log('Vendor profiles created.');
 
   // 4. Create Plants
+  // Real Trackso sites
   const plantAlpha = await prisma.plant.create({
     data: {
-      name: 'Plant Alpha',
-      location: 'Pune, Maharashtra',
-      peakCapacity: 250.0,
+      name: 'Hollister',
+      location: 'Bawal, Haryana',
+      peakCapacity: 497.0,
       status: 'Active',
       ownerId: clientUser.id,
     },
@@ -90,9 +91,9 @@ async function main() {
 
   const plantBeta = await prisma.plant.create({
     data: {
-      name: 'Plant Beta',
-      location: 'Mumbai, Maharashtra',
-      peakCapacity: 120.0,
+      name: 'Caparo Maruti India Ltd Bawal',
+      location: 'Bawal, Haryana',
+      peakCapacity: 507.0,
       status: 'Active',
       ownerId: clientUser.id,
     },
@@ -101,19 +102,20 @@ async function main() {
   console.log('Plants created.');
 
   // 5. Create Panels for Plants
-  // Plant Alpha Grid (2x2)
+  // Plant Alpha Grid (16x16 = 256 units)
   const panelsAlpha = [];
-  for (let r = 1; r <= 2; r++) {
-    for (let c = 1; c <= 2; c++) {
+  for (let r = 1; r <= 16; r++) {
+    for (let c = 1; c <= 16; c++) {
+      const isWarning = (r * 16 + c) % 37 === 0;
       const panel = await prisma.panel.create({
         data: {
           row: r,
           column: c,
-          status: r === 2 && c === 2 ? PanelStatus.WARNING : PanelStatus.HEALTHY,
-          voltage: r === 2 && c === 2 ? 38.2 : 42.5,
-          current: r === 2 && c === 2 ? 7.8 : 9.2,
-          temperature: r === 2 && c === 2 ? 55.4 : 45.2,
-          generation: r === 2 && c === 2 ? 297.9 : 391.0,
+          status: isWarning ? PanelStatus.WARNING : PanelStatus.HEALTHY,
+          voltage: isWarning ? 38.2 : 42.5,
+          current: isWarning ? 7.8 : 9.2,
+          temperature: isWarning ? 55.4 : 45.2,
+          generation: isWarning ? 297.9 : 391.0,
           plantId: plantAlpha.id,
         },
       });
@@ -121,22 +123,24 @@ async function main() {
     }
   }
 
-  // Plant Beta Grid (1x2)
+  // Plant Beta Grid (8x8 = 64 units)
   const panelsBeta = [];
-  for (let c = 1; c <= 2; c++) {
-    const panel = await prisma.panel.create({
-      data: {
-        row: 1,
-        column: c,
-        status: PanelStatus.HEALTHY,
-        voltage: 41.8,
-        current: 8.9,
-        temperature: 42.1,
-        generation: 372.0,
-        plantId: plantBeta.id,
-      },
-    });
-    panelsBeta.push(panel);
+  for (let r = 1; r <= 8; r++) {
+    for (let c = 1; c <= 8; c++) {
+      const panel = await prisma.panel.create({
+        data: {
+          row: r,
+          column: c,
+          status: PanelStatus.HEALTHY,
+          voltage: 41.8,
+          current: 8.9,
+          temperature: 42.1,
+          generation: 372.0,
+          plantId: plantBeta.id,
+        },
+      });
+      panelsBeta.push(panel);
+    }
   }
 
   console.log('Panels created.');

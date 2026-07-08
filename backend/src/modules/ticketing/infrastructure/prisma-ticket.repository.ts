@@ -52,17 +52,23 @@ export class PrismaTicketRepository implements ITicketRepository {
     return t ? this.mapTicketToEntity(t) : null;
   }
 
-  async findAll(): Promise<TicketEntity[]> {
+  async findAll(page = 1, limit = 100): Promise<TicketEntity[]> {
+    const skip = (page - 1) * limit;
     const tickets = await this.prisma.ticket.findMany({
+      skip,
+      take: limit,
       include: { comments: true },
       orderBy: { updatedAt: 'desc' },
     });
     return tickets.map(t => this.mapTicketToEntity(t));
   }
 
-  async findAllByUserId(userId: string): Promise<TicketEntity[]> {
+  async findAllByUserId(userId: string, page = 1, limit = 100): Promise<TicketEntity[]> {
+    const skip = (page - 1) * limit;
     const tickets = await this.prisma.ticket.findMany({
       where: { userId },
+      skip,
+      take: limit,
       include: { comments: true },
       orderBy: { updatedAt: 'desc' },
     });

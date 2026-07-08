@@ -26,6 +26,10 @@ export class PlantsService {
     return this.plantRepository.findAllByOwnerId(ownerId);
   }
 
+  async findByIds(ids: string[]): Promise<PlantEntity[]> {
+    return this.plantRepository.findByIds(ids);
+  }
+
   async create(dto: Partial<PlantEntity>): Promise<PlantEntity> {
     return this.plantRepository.create(dto);
   }

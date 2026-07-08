@@ -1,18 +1,37 @@
+import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import '../../../../core/widgets/user_avatar.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../ticketing/data/plants_repository.dart';
+import '../../../ticketing/domain/plant_model.dart';
+import '../../data/telemetry_repository.dart';
+import '../widgets/chart_painters.dart';
 
-class TelemetryDashboardScreen extends StatefulWidget {
+class TelemetryDashboardScreen extends ConsumerStatefulWidget {
   const TelemetryDashboardScreen({super.key});
 
   @override
-  State<TelemetryDashboardScreen> createState() => _TelemetryDashboardScreenState();
+  ConsumerState<TelemetryDashboardScreen> createState() => _TelemetryDashboardScreenState();
 }
 
-class _TelemetryDashboardScreenState extends State<TelemetryDashboardScreen> {
+class _TelemetryDashboardScreenState extends ConsumerState<TelemetryDashboardScreen> {
   int _selectedNav = 2; // Telemetry tab active
   int _selectedFilter = 0;
-  String _selectedArray = 'Helios North Array';
   bool _showAlertBanner = true;
+
+  static const _filterHours = [1, 6, 24, 168];
+
+  List<PlantModel> _plants = [];
+  PlantModel? _selectedPlant;
+  List<TelemetrySeriesPoint> _series = [];
+  List<DeviceModel> _devices = [];
+  TelemetryDashboardModel? _dashboard;
+  bool _loading = true;
+  bool _noPlants = false;
+  String? _error;
+  Timer? _refreshTimer;
 
   // Premium Design System
   static const _bg = Color(0xFFF4F6F8);
@@ -23,6 +42,73 @@ class _TelemetryDashboardScreenState extends State<TelemetryDashboardScreen> {
   static const _slateLight = Color(0xFF64748B);
 
   @override
+  void initState() {
+    super.initState();
+    _load();
+    // Backend syncs Trackso data every 2 minutes; refresh at the same cadence.
+    _refreshTimer = Timer.periodic(const Duration(minutes: 2), (_) => _load(silent: true));
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _load({bool silent = false}) async {
+    if (!silent) setState(() => _loading = true);
+    try {
+      if (_plants.isEmpty) {
+        _plants = await ref.read(plantsRepositoryProvider).getPlants();
+        if (_plants.isEmpty) {
+          if (!mounted) return;
+          setState(() {
+            _noPlants = true;
+            _loading = false;
+            _error = null;
+          });
+          return;
+        }
+        _selectedPlant ??= _plants.first;
+      }
+      final telemetryRepo = ref.read(telemetryRepositoryProvider);
+      final results = await Future.wait<dynamic>([
+        telemetryRepo.getSeries(_selectedPlant!.id, _filterHours[_selectedFilter]),
+        telemetryRepo.getDashboard(),
+        telemetryRepo.getDevices(_selectedPlant!.id),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _series = results[0] as List<TelemetrySeriesPoint>;
+        _dashboard = results[1] as TelemetryDashboardModel;
+        _devices = results[2] as List<DeviceModel>;
+        _loading = false;
+        _error = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = e.toString();
+      });
+    }
+  }
+
+  TelemetrySeriesPoint? get _latest => _series.isEmpty ? null : _series.last;
+
+  PlantMetricModel? get _plantMetrics {
+    final dash = _dashboard;
+    final plant = _selectedPlant;
+    if (dash == null || plant == null) return null;
+    final name = plant.name.toLowerCase();
+    if (name.contains('alpha') || name.contains('hollister')) return dash.plants['38124d4420'];
+    if (name.contains('beta') || name.contains('caparo')) return dash.plants['d0dd69ac58'];
+    return dash.plants.values.isNotEmpty ? dash.plants.values.first : null;
+  }
+
+  bool get _hasCriticalAlert => (_dashboard?.alerts ?? []).any((a) => a.type != 'INFO');
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _bg,
@@ -31,46 +117,100 @@ class _TelemetryDashboardScreenState extends State<TelemetryDashboardScreen> {
           children: [
             _topBar(),
             Expanded(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                child: Column(
-                  children: [
-                    if (_showAlertBanner) _alertBanner(),
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _headerRow(),
-                          const SizedBox(height: 16),
-                          _selectorRow(),
-                          const SizedBox(height: 16),
-                          _voltageCard(),
-                          const SizedBox(height: 12),
-                          _currentCard(),
-                          const SizedBox(height: 12),
-                          _frequencyCard(),
-                          const SizedBox(height: 12),
-                          _generationCard(),
-                          const SizedBox(height: 16),
-                          _phaseCharacteristicsCard(),
-                          const SizedBox(height: 16),
-                          _generationHistogramCard(),
-                          const SizedBox(height: 16),
-                          _inverterStatusCard(),
-                          const SizedBox(height: 16),
-                          _gridEventsLogCard(),
-                          const SizedBox(height: 24),
-                          _footer(),
-                          const SizedBox(height: 12),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator(color: _teal))
+                  : _noPlants
+                      ? _noPlantsView()
+                      : _error != null
+                      ? _errorView()
+                      : SingleChildScrollView(
+                          physics: const BouncingScrollPhysics(),
+                          child: Column(
+                            children: [
+                              if (_showAlertBanner && _hasCriticalAlert) _alertBanner(),
+                              Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _headerRow(),
+                                    const SizedBox(height: 16),
+                                    _selectorRow(),
+                                    const SizedBox(height: 16),
+                                    _voltageCard(),
+                                    const SizedBox(height: 12),
+                                    _currentCard(),
+                                    const SizedBox(height: 12),
+                                    _temperatureCard(),
+                                    const SizedBox(height: 12),
+                                    _generationCard(),
+                                    const SizedBox(height: 16),
+                                    _phaseCharacteristicsCard(),
+                                    const SizedBox(height: 16),
+                                    _generationHistogramCard(),
+                                    const SizedBox(height: 16),
+                                    _sitesStatusCard(),
+                                    const SizedBox(height: 16),
+                                    _gridEventsLogCard(),
+                                    const SizedBox(height: 24),
+                                    _footer(),
+                                    const SizedBox(height: 12),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
             ),
             _bottomNav(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _noPlantsView() {
+    return const Center(
+      child: Padding(
+        padding: EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.sensors_off_rounded, color: _slateLight, size: 40),
+            SizedBox(height: 12),
+            Text('No plants assigned yet',
+                style: TextStyle(color: _slateDark, fontSize: 15, fontWeight: FontWeight.w800)),
+            SizedBox(height: 6),
+            Text(
+              'Your administrator has not assigned any plant to your account. Please contact them to get access.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: _slateLight, fontSize: 12),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _errorView() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.cloud_off_rounded, color: _slateLight, size: 36),
+            const SizedBox(height: 12),
+            Text(
+              'Could not load telemetry\n$_error',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: _slateLight, fontSize: 12),
+            ),
+            const SizedBox(height: 16),
+            TextButton(
+              onPressed: _load,
+              child: const Text('Retry', style: TextStyle(color: _teal, fontWeight: FontWeight.w700)),
+            ),
           ],
         ),
       ),
@@ -110,17 +250,14 @@ class _TelemetryDashboardScreenState extends State<TelemetryDashboardScreen> {
             ),
           ),
           const Spacer(),
-          Container(
-            width: 32,
-            height: 32,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              image: DecorationImage(
-                image: NetworkImage('https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=80&fit=crop&q=80'),
-                fit: BoxFit.cover,
-              ),
+          GestureDetector(
+            onTap: () => context.push('/reports'),
+            child: const Padding(
+              padding: EdgeInsets.only(right: 14),
+              child: Icon(Icons.description_outlined, color: _slateDark, size: 21),
             ),
           ),
+          const UserAvatar(size: 32),
         ],
       ),
     );
@@ -128,6 +265,11 @@ class _TelemetryDashboardScreenState extends State<TelemetryDashboardScreen> {
 
   // ── Alert Banner ───────────────────────────────────────────────────────────
   Widget _alertBanner() {
+    final alert = (_dashboard?.alerts ?? []).firstWhere(
+      (a) => a.type != 'INFO',
+      orElse: () => AlertModel(type: 'INFO', title: '', location: '', time: ''),
+    );
+    if (alert.title.isEmpty) return const SizedBox.shrink();
     return Container(
       width: double.infinity,
       color: const Color(0xFFFEE2E2),
@@ -136,10 +278,10 @@ class _TelemetryDashboardScreenState extends State<TelemetryDashboardScreen> {
         children: [
           const Icon(Icons.warning_amber_rounded, color: Color(0xFFDC2626), size: 18),
           const SizedBox(width: 10),
-          const Expanded(
+          Expanded(
             child: Text(
-              'Panel B-12 fault detected. Ticket auto-created.',
-              style: TextStyle(
+              '${alert.title} (${alert.location})',
+              style: const TextStyle(
                 color: Color(0xFF991B1B),
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
@@ -178,7 +320,7 @@ class _TelemetryDashboardScreenState extends State<TelemetryDashboardScreen> {
                 borderRadius: BorderRadius.circular(6),
               ),
               child: const Text(
-                'Connected via MQTT',
+                'Trackso Sync',
                 style: TextStyle(
                   color: _teal,
                   fontSize: 9,
@@ -189,9 +331,9 @@ class _TelemetryDashboardScreenState extends State<TelemetryDashboardScreen> {
           ],
         ),
         const SizedBox(height: 4),
-        const Text(
-          'Live stream from Helios North Array',
-          style: TextStyle(
+        Text(
+          'Live data from ${_selectedPlant?.name ?? ''}',
+          style: const TextStyle(
             color: _slateLight,
             fontSize: 11.5,
             fontWeight: FontWeight.w500,
@@ -216,14 +358,21 @@ class _TelemetryDashboardScreenState extends State<TelemetryDashboardScreen> {
             ),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
-                value: _selectedArray,
+                value: _selectedPlant?.id,
+                isExpanded: true,
                 icon: const Icon(Icons.keyboard_arrow_down_rounded, color: _slateLight, size: 18),
                 style: const TextStyle(color: _slateDark, fontSize: 12, fontWeight: FontWeight.w700),
-                onChanged: (String? val) {
-                  if (val != null) setState(() => _selectedArray = val);
+                onChanged: (String? id) {
+                  if (id != null) {
+                    setState(() => _selectedPlant = _plants.firstWhere((p) => p.id == id));
+                    _load();
+                  }
                 },
-                items: ['Helios North Array', 'Morwad South Array', 'Pune Tech Array']
-                    .map((item) => DropdownMenuItem(value: item, child: Text(item)))
+                items: _plants
+                    .map((p) => DropdownMenuItem(
+                          value: p.id,
+                          child: Text('${p.name} – ${p.location}', overflow: TextOverflow.ellipsis),
+                        ))
                     .toList(),
               ),
             ),
@@ -235,7 +384,10 @@ class _TelemetryDashboardScreenState extends State<TelemetryDashboardScreen> {
               .asMap()
               .entries
               .map((e) => GestureDetector(
-                    onTap: () => setState(() => _selectedFilter = e.key),
+                    onTap: () {
+                      setState(() => _selectedFilter = e.key);
+                      _load();
+                    },
                     child: Container(
                       margin: const EdgeInsets.only(left: 4),
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -260,40 +412,25 @@ class _TelemetryDashboardScreenState extends State<TelemetryDashboardScreen> {
     );
   }
 
-  // ── Card 1: Voltage Card ───────────────────────────────────────────────────
-  Widget _voltageCard() {
-    return _card_(
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Text(
-                'VOLTAGE',
-                style: TextStyle(color: _slateLight, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.5),
-              ),
-              SizedBox(height: 8),
-              Text(
-                '240 V',
-                style: TextStyle(color: _slateDark, fontSize: 24, fontWeight: FontWeight.w800),
-              ),
-            ],
-          ),
-          SizedBox(
-            width: 60,
-            height: 35,
-            child: CustomPaint(
-              painter: _SparklinePainter(),
-            ),
-          ),
-        ],
-      ),
-    );
+  // Real AC readings aggregated across the plant's inverters (Trackso)
+  double get _acVoltage {
+    final reporting = _devices.where((d) => d.acVoltage > 0).toList();
+    if (reporting.isEmpty) return 0;
+    return reporting.map((d) => d.acVoltage).reduce((a, b) => a + b) / reporting.length;
   }
 
-  // ── Card 2: Current Card ───────────────────────────────────────────────────
-  Widget _currentCard() {
+  double get _acCurrent => _devices.fold<double>(0, (s, d) => s + d.acCurrent);
+
+  double get _acFrequency {
+    final reporting = _devices.where((d) => d.acFrequency > 0).toList();
+    if (reporting.isEmpty) return 0;
+    return reporting.map((d) => d.acFrequency).reduce((a, b) => a + b) / reporting.length;
+  }
+
+  // ── Card 1: AC Voltage Card ────────────────────────────────────────────────
+  Widget _voltageCard() {
+    final voltage = _acVoltage;
+    final sparkline = _series.map((p) => p.avgVoltage).toList();
     return _card_(
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -302,35 +439,63 @@ class _TelemetryDashboardScreenState extends State<TelemetryDashboardScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'CURRENT',
+                'AC VOLTAGE (AVG)',
+                style: TextStyle(color: _slateLight, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.5),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '${voltage.toStringAsFixed(1)} V',
+                style: const TextStyle(color: _slateDark, fontSize: 24, fontWeight: FontWeight.w800),
+              ),
+            ],
+          ),
+          SizedBox(
+            width: 60,
+            height: 35,
+            child: CustomPaint(
+              painter: SparklinePainter(values: sparkline),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Card 2: AC Current Card ────────────────────────────────────────────────
+  Widget _currentCard() {
+    final current = _acCurrent;
+    final generating = _devices.where((d) => d.activePowerKw > 0).length;
+    return _card_(
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'AC CURRENT (TOTAL)',
                 style: TextStyle(color: _slateLight, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.5),
               ),
               const SizedBox(height: 8),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.baseline,
                 textBaseline: TextBaseline.alphabetic,
-                children: const [
+                children: [
                   Text(
-                    '15',
-                    style: TextStyle(color: _slateDark, fontSize: 24, fontWeight: FontWeight.w800),
+                    current.toStringAsFixed(0),
+                    style: const TextStyle(color: _slateDark, fontSize: 24, fontWeight: FontWeight.w800),
                   ),
-                  SizedBox(width: 4),
-                  Text(
+                  const SizedBox(width: 4),
+                  const Text(
                     'A',
                     style: TextStyle(color: _slateLight, fontSize: 13, fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
               const SizedBox(height: 4),
-              Row(
-                children: const [
-                  Icon(Icons.trending_up_rounded, color: Color(0xFF10B981), size: 12),
-                  SizedBox(width: 2),
-                  Text(
-                    '+1.2% from avg',
-                    style: TextStyle(color: Color(0xFF10B981), fontSize: 10.5, fontWeight: FontWeight.w600),
-                  ),
-                ],
+              Text(
+                '$generating of ${_devices.length} devices generating',
+                style: const TextStyle(color: _slateLight, fontSize: 10.5, fontWeight: FontWeight.w600),
               ),
             ],
           ),
@@ -340,8 +505,9 @@ class _TelemetryDashboardScreenState extends State<TelemetryDashboardScreen> {
     );
   }
 
-  // ── Card 3: Frequency Card ─────────────────────────────────────────────────
-  Widget _frequencyCard() {
+  // ── Card 3: AC Frequency Card ──────────────────────────────────────────────
+  Widget _temperatureCard() {
+    final freq = _acFrequency;
     return _card_(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -350,23 +516,23 @@ class _TelemetryDashboardScreenState extends State<TelemetryDashboardScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: const [
               Text(
-                'FREQUENCY',
+                'GRID FREQUENCY',
                 style: TextStyle(color: _slateLight, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.5),
               ),
               Icon(Icons.reorder_rounded, color: _slateLight, size: 20),
             ],
           ),
           const SizedBox(height: 8),
-          const Text(
-            '50.2 Hz',
-            style: TextStyle(color: _teal, fontSize: 24, fontWeight: FontWeight.w800),
+          Text(
+            freq == 0 ? '—' : '${freq.toStringAsFixed(2)} Hz',
+            style: const TextStyle(color: _teal, fontSize: 24, fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 10),
-          const ClipRRect(
-            borderRadius: BorderRadius.all(Radius.circular(4)),
+          ClipRRect(
+            borderRadius: const BorderRadius.all(Radius.circular(4)),
             child: LinearProgressIndicator(
-              value: 0.83,
-              backgroundColor: Color(0xFFF1F5F9),
+              value: freq == 0 ? 0 : ((freq - 49) / 2).clamp(0.0, 1.0),
+              backgroundColor: const Color(0xFFF1F5F9),
               color: _teal,
               minHeight: 6,
             ),
@@ -378,6 +544,9 @@ class _TelemetryDashboardScreenState extends State<TelemetryDashboardScreen> {
 
   // ── Card 4: Generation Card (Amber Background) ─────────────────────────────
   Widget _generationCard() {
+    final metrics = _plantMetrics;
+    final livePowerKw = metrics?.livePower ?? ((_latest?.totalGeneration ?? 0) / 1000);
+    final dailyEnergy = metrics?.dailyEnergy ?? 0;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -399,25 +568,41 @@ class _TelemetryDashboardScreenState extends State<TelemetryDashboardScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: const [
               Text(
-                'GENERATION',
+                'LIVE GENERATION',
                 style: TextStyle(color: Color(0xFF92400E), fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 0.5),
               ),
               Icon(Icons.remove_red_eye_outlined, color: Color(0xFF92400E), size: 18),
             ],
           ),
           const SizedBox(height: 8),
-          const Text(
-            '3.8 kW',
-            style: TextStyle(color: Color(0xFF92400E), fontSize: 24, fontWeight: FontWeight.w800),
+          Text(
+            '${livePowerKw.toStringAsFixed(1)} kW',
+            style: const TextStyle(color: Color(0xFF92400E), fontSize: 24, fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 4),
-          const Text(
-            'Peak output achieved',
-            style: TextStyle(color: Color(0xFFB45309), fontSize: 11, fontWeight: FontWeight.w600),
+          Text(
+            'Today: ${dailyEnergy.toStringAsFixed(1)} kWh',
+            style: const TextStyle(color: Color(0xFFB45309), fontSize: 11, fontWeight: FontWeight.w600),
           ),
         ],
       ),
     );
+  }
+
+  String _timeLabel(DateTime t) {
+    if (_filterHours[_selectedFilter] > 24) {
+      return '${t.day}/${t.month}';
+    }
+    return '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+  }
+
+  List<String> get _chartTimeLabels {
+    if (_series.length < 2) return [];
+    const count = 5;
+    return List.generate(count, (i) {
+      final idx = (i * (_series.length - 1) / (count - 1)).round();
+      return _timeLabel(_series[idx].timestamp);
+    });
   }
 
   // ── Card 5: Phase Characteristics Card ─────────────────────────────────────
@@ -444,21 +629,29 @@ class _TelemetryDashboardScreenState extends State<TelemetryDashboardScreen> {
           ),
           const SizedBox(height: 2),
           const Text(
-            'Live Voltage (V) vs Current (A) correlation',
+            'Voltage (V) vs Current (A) over time',
             style: TextStyle(color: _slateLight, fontSize: 11, fontWeight: FontWeight.w500),
           ),
           const SizedBox(height: 18),
           SizedBox(
             height: 90,
             width: double.infinity,
-            child: CustomPaint(
-              painter: _PhaseChartPainter(),
-            ),
+            child: _series.length < 2
+                ? const Center(
+                    child: Text('Not enough data for this window',
+                        style: TextStyle(color: _slateLight, fontSize: 11)),
+                  )
+                : CustomPaint(
+                    painter: PhaseChartPainter(
+                      voltage: _series.map((p) => p.avgVoltage).toList(),
+                      current: _series.map((p) => p.totalCurrent).toList(),
+                    ),
+                  ),
           ),
           const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: ['11:00', '11:15', '11:30', '11:45', '12:00']
+            children: _chartTimeLabels
                 .map((t) => Text(t, style: const TextStyle(color: _slateLight, fontSize: 10, fontWeight: FontWeight.w500)))
                 .toList(),
           ),
@@ -483,6 +676,19 @@ class _TelemetryDashboardScreenState extends State<TelemetryDashboardScreen> {
 
   // ── Card 6: Generation Histogram Card ──────────────────────────────────────
   Widget _generationHistogramCard() {
+    // Downsample the series into 8 bars of average generation (kW)
+    final bars = <double>[];
+    if (_series.isNotEmpty) {
+      const barCount = 8;
+      final chunk = (_series.length / barCount).ceil().clamp(1, 1 << 30);
+      for (int i = 0; i < _series.length; i += chunk) {
+        final slice = _series.sublist(i, math.min(i + chunk, _series.length));
+        final avg = slice.map((p) => p.totalGeneration).reduce((a, b) => a + b) / slice.length;
+        bars.add(avg / 1000); // W -> kW
+      }
+    }
+    final peak = bars.isEmpty ? 0.0 : bars.reduce(math.max);
+    final metrics = _plantMetrics;
     return _card_(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -497,25 +703,27 @@ class _TelemetryDashboardScreenState extends State<TelemetryDashboardScreen> {
             style: TextStyle(color: _slateLight, fontSize: 11, fontWeight: FontWeight.w500),
           ),
           const SizedBox(height: 18),
-          _histogramChart(),
+          _histogramChart(bars, peak),
           const SizedBox(height: 18),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Text('Peak Today', style: TextStyle(color: _slateLight, fontSize: 10, fontWeight: FontWeight.w600)),
-                  SizedBox(height: 2),
-                  Text('4.2 kW', style: TextStyle(color: _teal, fontSize: 12, fontWeight: FontWeight.w800)),
+                children: [
+                  const Text('Peak (window)', style: TextStyle(color: _slateLight, fontSize: 10, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 2),
+                  Text('${peak.toStringAsFixed(1)} kW',
+                      style: const TextStyle(color: _teal, fontSize: 12, fontWeight: FontWeight.w800)),
                 ],
               ),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Text('Avg Efficiency', style: TextStyle(color: _slateLight, fontSize: 10, fontWeight: FontWeight.w600)),
-                  SizedBox(height: 2),
-                  Text('94.8%', style: TextStyle(color: _teal, fontSize: 12, fontWeight: FontWeight.w800)),
+                children: [
+                  const Text('CUF', style: TextStyle(color: _slateLight, fontSize: 10, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 2),
+                  Text('${(metrics?.cuf ?? 0).toStringAsFixed(1)}%',
+                      style: const TextStyle(color: _teal, fontSize: 12, fontWeight: FontWeight.w800)),
                 ],
               ),
             ],
@@ -525,43 +733,53 @@ class _TelemetryDashboardScreenState extends State<TelemetryDashboardScreen> {
     );
   }
 
-  Widget _histogramChart() {
-    final heights = [0.25, 0.45, 0.30, 0.65, 0.55, 0.40, 0.80, 0.20];
+  Widget _histogramChart(List<double> bars, double peak) {
+    if (bars.isEmpty) {
+      return const SizedBox(
+        height: 80,
+        child: Center(
+          child: Text('No generation data in this window',
+              style: TextStyle(color: _slateLight, fontSize: 11)),
+        ),
+      );
+    }
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       crossAxisAlignment: CrossAxisAlignment.end,
-      children: heights
-          .map((h) => Container(
-                width: 24,
-                height: 80 * h,
-                decoration: BoxDecoration(
-                  color: h > 0.6 ? const Color(0xFF2A8C6E) : const Color(0xFF2A8C6E).withValues(alpha: 0.4),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ))
-          .toList(),
+      children: bars.map((kw) {
+        final h = peak == 0 ? 0.05 : (kw / peak).clamp(0.05, 1.0);
+        return Container(
+          width: 24,
+          height: 80 * h,
+          decoration: BoxDecoration(
+            color: h > 0.6 ? const Color(0xFF2A8C6E) : const Color(0xFF2A8C6E).withValues(alpha: 0.4),
+            borderRadius: BorderRadius.circular(4),
+          ),
+        );
+      }).toList(),
     );
   }
 
-  // ── Card 7: Inverter Status Card ───────────────────────────────────────────
-  Widget _inverterStatusCard() {
-    final inverters = [
-      ('INV-Alpha-01', 'SN: 26023-EC', 'ONLINE', const Color(0xFF10B981)),
-      ('INV-Alpha-02', 'SN: 26024-EC', 'ONLINE', const Color(0xFF10B981)),
-      ('INV-Beta-03', 'SN: 26027-EC', 'OFFLINE', const Color(0xFFEF4444)),
-    ];
+  // ── Card 7: Sites Status Card ──────────────────────────────────────────────
+  Widget _sitesStatusCard() {
+    final sites = _dashboard?.plants.values.toList() ?? [];
     return _card_(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Inverter Status',
+            'Site Status',
             style: TextStyle(color: _slateDark, fontSize: 14, fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 14),
-          ...inverters.asMap().entries.map((entry) {
+          if (sites.isEmpty)
+            const Text('No site data available',
+                style: TextStyle(color: _slateLight, fontSize: 11)),
+          ...sites.asMap().entries.map((entry) {
             final idx = entry.key;
-            final item = entry.value;
+            final site = entry.value;
+            final online = site.status.toLowerCase() == 'active';
+            final color = online ? const Color(0xFF10B981) : const Color(0xFFEF4444);
             return Column(
               children: [
                 if (idx > 0) const Padding(
@@ -574,31 +792,36 @@ class _TelemetryDashboardScreenState extends State<TelemetryDashboardScreen> {
                       width: 32,
                       height: 32,
                       decoration: BoxDecoration(
-                        color: item.$4.withValues(alpha: 0.08),
+                        color: color.withValues(alpha: 0.08),
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(Icons.solar_power_rounded, color: item.$4, size: 16),
+                      child: Icon(Icons.solar_power_rounded, color: color, size: 16),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(item.$1, style: const TextStyle(color: _slateDark, fontSize: 12.5, fontWeight: FontWeight.w700)),
+                          Text(site.siteName,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(color: _slateDark, fontSize: 12.5, fontWeight: FontWeight.w700)),
                           const SizedBox(height: 1.5),
-                          Text(item.$2, style: const TextStyle(color: _slateLight, fontSize: 10, fontWeight: FontWeight.w500)),
+                          Text(
+                            '${site.livePower.toStringAsFixed(1)} kW · ${site.dailyEnergy.toStringAsFixed(0)} kWh today',
+                            style: const TextStyle(color: _slateLight, fontSize: 10, fontWeight: FontWeight.w500),
+                          ),
                         ],
                       ),
                     ),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: item.$4.withValues(alpha: 0.1),
+                        color: color.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
-                        item.$3,
-                        style: TextStyle(color: item.$4, fontSize: 10, fontWeight: FontWeight.w800),
+                        site.status.toUpperCase(),
+                        style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w800),
                       ),
                     ),
                   ],
@@ -613,26 +836,18 @@ class _TelemetryDashboardScreenState extends State<TelemetryDashboardScreen> {
 
   // ── Card 8: Grid Events Log Card ───────────────────────────────────────────
   Widget _gridEventsLogCard() {
-    final events = [
-      (
-        const Color(0xFFEF4444),
-        'Critical: Voltage Drop',
-        'Phase 3 voltage fell below 210V threshold for 2.4s',
-        '15:45:01'
-      ),
-      (
-        const Color(0xFFF5A623),
-        'Warning: High Temperature',
-        'Inverter temperature reached 78°C. Thermal throttling enabled.',
-        '12:20:15'
-      ),
-      (
-        _teal,
-        'Info: MQTT Resync',
-        'Broker connection re-established successfully.',
-        '10:14:44'
-      ),
-    ];
+    final alerts = _dashboard?.alerts ?? [];
+    Color alertColor(String type) {
+      switch (type) {
+        case 'CRITICAL':
+          return const Color(0xFFEF4444);
+        case 'WARNING':
+          return const Color(0xFFF5A623);
+        default:
+          return _teal;
+      }
+    }
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
       child: Container(
@@ -655,7 +870,7 @@ class _TelemetryDashboardScreenState extends State<TelemetryDashboardScreen> {
               color: const Color(0xFFF8FAFC),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: const Text(
-                'Grid Events Log',
+                'Site Events',
                 style: TextStyle(color: _slateDark, fontSize: 13, fontWeight: FontWeight.w800),
               ),
             ),
@@ -664,7 +879,10 @@ class _TelemetryDashboardScreenState extends State<TelemetryDashboardScreen> {
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  ...events.asMap().entries.map((entry) {
+                  if (alerts.isEmpty)
+                    const Text('No events reported',
+                        style: TextStyle(color: _slateLight, fontSize: 11)),
+                  ...alerts.asMap().entries.map((entry) {
                     final idx = entry.key;
                     final ev = entry.value;
                     return Column(
@@ -680,42 +898,28 @@ class _TelemetryDashboardScreenState extends State<TelemetryDashboardScreen> {
                               margin: const EdgeInsets.only(top: 3),
                               width: 8,
                               height: 8,
-                              decoration: BoxDecoration(color: ev.$1, shape: BoxShape.circle),
+                              decoration: BoxDecoration(color: alertColor(ev.type), shape: BoxShape.circle),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(ev.$2, style: const TextStyle(color: _slateDark, fontSize: 12, fontWeight: FontWeight.w700)),
+                                  Text(ev.title,
+                                      style: const TextStyle(color: _slateDark, fontSize: 12, fontWeight: FontWeight.w700)),
                                   const SizedBox(height: 2),
-                                  Text(ev.$3, style: const TextStyle(color: _slateLight, fontSize: 10.5, fontWeight: FontWeight.w500)),
+                                  Text(ev.location,
+                                      style: const TextStyle(color: _slateLight, fontSize: 10.5, fontWeight: FontWeight.w500)),
                                 ],
                               ),
                             ),
                             const SizedBox(width: 10),
-                            Text(ev.$4, style: const TextStyle(color: _slateLight, fontSize: 10, fontWeight: FontWeight.w500)),
+                            Text(ev.time, style: const TextStyle(color: _slateLight, fontSize: 10, fontWeight: FontWeight.w500)),
                           ],
                         ),
                       ],
                     );
                   }),
-                  const SizedBox(height: 14),
-                  // Button
-                  Container(
-                    width: double.infinity,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      border: Border.all(color: _teal.withValues(alpha: 0.3), width: 1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Center(
-                      child: Text(
-                        'View All Event Logs',
-                        style: TextStyle(color: _teal, fontSize: 11.5, fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -764,9 +968,8 @@ class _TelemetryDashboardScreenState extends State<TelemetryDashboardScreen> {
       (Icons.sensors_rounded, 'Telemetry'),
       (Icons.receipt_long_rounded, 'Billing'),
       (Icons.confirmation_number_outlined, 'Tickets'),
-      (Icons.person_outline_rounded, 'Profile'),
     ];
-    final routes = ['/client-dashboard', '/solar-grid', null, '/billing', '/tickets', '/profile'];
+    final routes = ['/client-dashboard', '/solar-grid', null, '/billing', '/tickets'];
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -836,80 +1039,4 @@ class _TelemetryDashboardScreenState extends State<TelemetryDashboardScreen> {
       child: child,
     );
   }
-}
-
-// ── Phase Chart Painter ──────────────────────────────────────────────────────
-class _PhaseChartPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-
-    // Voltage Curve (Teal)
-    final vPts = [
-      Offset(0, h * 0.50),
-      Offset(w * 0.25, h * 0.40),
-      Offset(w * 0.50, h * 0.60),
-      Offset(w * 0.75, h * 0.45),
-      Offset(w, h * 0.55),
-    ];
-    final vPath = _smoothPath(vPts);
-    final vPaint = Paint()
-      ..color = const Color(0xFF0D9488)
-      ..strokeWidth = 2.2
-      ..style = PaintingStyle.stroke;
-    canvas.drawPath(vPath, vPaint);
-
-    // Current Curve (Light Teal)
-    final cPts = [
-      Offset(0, h * 0.70),
-      Offset(w * 0.25, h * 0.55),
-      Offset(w * 0.50, h * 0.75),
-      Offset(w * 0.75, h * 0.60),
-      Offset(w, h * 0.70),
-    ];
-    final cPath = _smoothPath(cPts);
-    final cPaint = Paint()
-      ..color = const Color(0xFF2A8C6E).withValues(alpha: 0.5)
-      ..strokeWidth = 2.2
-      ..style = PaintingStyle.stroke;
-    canvas.drawPath(cPath, cPaint);
-  }
-
-  Path _smoothPath(List<Offset> pts) {
-    final path = Path();
-    path.moveTo(pts[0].dx, pts[0].dy);
-    for (int i = 0; i < pts.length - 1; i++) {
-      final cp1 = Offset((pts[i].dx + pts[i + 1].dx) / 2, pts[i].dy);
-      final cp2 = Offset((pts[i].dx + pts[i + 1].dx) / 2, pts[i + 1].dy);
-      path.cubicTo(cp1.dx, cp1.dy, cp2.dx, cp2.dy, pts[i + 1].dx, pts[i + 1].dy);
-    }
-    return path;
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter old) => false;
-}
-
-// ── Sparkline Painter ────────────────────────────────────────────────────────
-class _SparklinePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = const Color(0xFF0D9488)
-      ..strokeWidth = 3.5
-      ..strokeCap = StrokeCap.round;
-
-    final heights = [0.35, 0.55, 0.45, 0.80, 0.65, 0.95, 0.85];
-    final spacing = size.width / (heights.length - 1);
-
-    for (int i = 0; i < heights.length; i++) {
-      final x = i * spacing;
-      final y = size.height * (1.0 - heights[i]);
-      canvas.drawLine(Offset(x, size.height), Offset(x, y), paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter old) => false;
 }

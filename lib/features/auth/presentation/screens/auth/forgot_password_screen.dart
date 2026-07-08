@@ -1,19 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../data/auth_repository.dart';
 
-class ForgotPasswordScreen extends StatefulWidget {
+class ForgotPasswordScreen extends ConsumerStatefulWidget {
   const ForgotPasswordScreen({super.key});
 
   @override
-  State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
+  ConsumerState<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
 }
 
-class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
+class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
     with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   bool _otpSent = false;
   bool _loading = false;
+  String? _errorMessage;
 
   static const _teal = Color(0xFF2A8C6E);
 
@@ -44,12 +47,23 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
 
   Future<void> _sendOtp() async {
     if (_formKey.currentState!.validate()) {
-      setState(() => _loading = true);
-      await Future.delayed(const Duration(seconds: 1));
       setState(() {
-        _loading = false;
-        _otpSent = true;
+        _loading = true;
+        _errorMessage = null;
       });
+      try {
+        final authRepository = ref.read(authRepositoryProvider);
+        await authRepository.forgotPassword(_emailController.text.trim());
+        setState(() {
+          _loading = false;
+          _otpSent = true;
+        });
+      } catch (e) {
+        setState(() {
+          _loading = false;
+          _errorMessage = e.toString().replaceFirst('Exception: ', '');
+        });
+      }
     }
   }
 
@@ -145,6 +159,35 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                                     'OTP sent! Check your inbox.',
                                     style: TextStyle(
                                         color: Colors.grey.shade700,
+                                        fontSize: 13),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                        // Error message
+                        if (_errorMessage != null)
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(14),
+                            margin: const EdgeInsets.only(bottom: 20),
+                            decoration: BoxDecoration(
+                              color: Colors.red.withValues(alpha: 0.07),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                  color: Colors.red.withValues(alpha: 0.3)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.error_outline,
+                                    color: Colors.red, size: 20),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    _errorMessage!,
+                                    style: TextStyle(
+                                        color: Colors.red.shade700,
                                         fontSize: 13),
                                   ),
                                 ),

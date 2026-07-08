@@ -43,3 +43,19 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+// Auto-forward backend port so localhost:3000 works on real Android devices
+tasks.register("adbReverseBackend") {
+    doLast {
+        try {
+            ProcessBuilder("adb", "reverse", "tcp:3000", "tcp:3000")
+                .inheritIO().start().waitFor()
+            logger.lifecycle("adb reverse OK")
+        } catch (e: Exception) {
+            logger.warn("adb reverse skipped: ${e.message}")
+        }
+    }
+}
+tasks.matching { it.name == "preDebugBuild" }.configureEach {
+    dependsOn("adbReverseBackend")
+}

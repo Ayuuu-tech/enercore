@@ -1,7 +1,9 @@
+import 'dart:io' show SocketException;
+import 'package:http/http.dart' show ClientException;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../data/auth_repository.dart';
+import '../../../application/auth_controller.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
@@ -23,7 +25,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
   bool _obscureConfirm = true;
   String _selectedRole = 'user';
   bool _loading = false;
-  bool _submitted = false;
 
   static const _teal = Color(0xFF2A8C6E);
 
@@ -73,22 +74,27 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
     }
     setState(() => _loading = true);
     try {
-      await ref.read(authRepositoryProvider).register(
+      await ref.read(authControllerProvider.notifier).register(
         _emailController.text.trim(),
         _passwordController.text,
         _nameController.text.trim(),
         _selectedRole == 'user' ? 'CLIENT' : 'VENDOR',
+        phone: _phoneController.text.trim(),
       );
-      setState(() {
-        _loading = false;
-        _submitted = true;
-      });
+      setState(() => _loading = false);
+      // Navigation handled centrally by the router redirect on auth state change.
     } catch (e) {
       setState(() => _loading = false);
       if (mounted) {
+        String msg;
+        if (e is SocketException || e is ClientException) {
+          msg = 'Cannot reach server. On Android real device, run:\n  adb reverse tcp:3000 tcp:3000\nThen restart the app.';
+        } else {
+          msg = e.toString().replaceAll('Exception:', '');
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.toString().replaceAll('Exception:', '')),
+            content: Text(msg),
             backgroundColor: Colors.redAccent,
           ),
         );
@@ -138,9 +144,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                   padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
                   child: SlideTransition(
                     position: _slideAnim,
-                    child: _submitted
-                        ? _buildSuccess()
-                        : _buildForm(),
+                    child: _buildForm(),
                   ),
                 ),
               ),
@@ -161,58 +165,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
           ),
         ),
       ),
-    );
-  }
-
-  // ── Success state ─────────────────────────────────────────────────────────
-  Widget _buildSuccess() {
-    return Column(
-      children: [
-        Image.asset('assets/images/logo.png', height: 54),
-        const SizedBox(height: 40),
-        Container(
-          width: 72,
-          height: 72,
-          decoration: BoxDecoration(
-            color: _teal.withValues(alpha: 0.1),
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(Icons.check_rounded, color: _teal, size: 36),
-        ),
-        const SizedBox(height: 20),
-        Text(
-          'Request Submitted!',
-          style: TextStyle(
-            color: Colors.grey.shade900,
-            fontSize: 24,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Our team will review your request and get in touch within 24 hours.',
-          style: TextStyle(color: Colors.grey.shade500, fontSize: 14, height: 1.5),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 32),
-        SizedBox(
-          width: double.infinity,
-          height: 50,
-          child: ElevatedButton(
-            onPressed: () => context.go('/login'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _teal,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
-            ),
-            child: const Text('Back to Sign In',
-                style:
-                    TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-          ),
-        ),
-      ],
     );
   }
 

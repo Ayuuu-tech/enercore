@@ -46,3 +46,12 @@ app.*.map.json
 
 # MCP configuration
 mcp.json
+
+# Node / backend
+**/node_modules/
+backend/dist/
+*.log
+
+# Flutter build output (also covered per-dir, kept here for safety)
+build/
+.dart_tool/

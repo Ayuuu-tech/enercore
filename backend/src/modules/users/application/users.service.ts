@@ -17,14 +17,6 @@ export class UsersService {
     return user;
   }
 
-  async findByEmail(email: string): Promise<UserEntity | null> {
-    return this.userRepository.findByEmail(email);
-  }
-
-  async create(user: Partial<UserEntity>): Promise<UserEntity> {
-    return this.userRepository.create(user);
-  }
-
   async update(id: string, userDto: Partial<UserEntity>): Promise<UserEntity> {
     // Check if exists
     await this.findById(id);

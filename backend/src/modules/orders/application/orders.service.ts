@@ -26,6 +26,10 @@ export class OrdersService {
     return this.orderRepository.findAllByUserId(userId);
   }
 
+  async findAllByVendor(vendorId: string): Promise<OrderEntity[]> {
+    return this.orderRepository.findAllByVendorId(vendorId);
+  }
+
   async createOrder(userId: string, items: { productId: string; quantity: number }[]): Promise<OrderEntity> {
     return this.orderRepository.create(userId, items);
   }

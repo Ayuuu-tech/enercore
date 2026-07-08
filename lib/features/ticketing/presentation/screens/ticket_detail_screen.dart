@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../../../core/widgets/user_avatar.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../data/ticketing_repository.dart';
@@ -316,17 +317,7 @@ class _TicketsDetailScreenState extends ConsumerState<TicketsDetailScreen> {
             ),
           ),
           const Spacer(),
-          Container(
-            width: 32,
-            height: 32,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              image: DecorationImage(
-                image: NetworkImage('https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=80&fit=crop&q=80'),
-                fit: BoxFit.cover,
-              ),
-            ),
-          ),
+          const UserAvatar(size: 32),
         ],
       ),
     );
@@ -695,9 +686,8 @@ class _TicketsDetailScreenState extends ConsumerState<TicketsDetailScreen> {
       (Icons.sensors_rounded, 'Telemetry'),
       (Icons.receipt_long_rounded, 'Billing'),
       (Icons.confirmation_number_outlined, 'Tickets'),
-      (Icons.person_outline_rounded, 'Profile'),
     ];
-    final List<String?> routes = ['/client-dashboard', '/solar-grid', '/telemetry', '/billing', null, '/profile'];
+    final List<String?> routes = ['/client-dashboard', '/solar-grid', '/telemetry', '/billing', null];
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
