@@ -35,8 +35,9 @@ export class PlantAccessService {
   }
 
   /**
-   * Trackso site keys the user may see, or null for "all" (admins).
-   * Maps each accessible plant's name to its Trackso site key.
+   * Dashboard cache keys the user may see, or null for "all" (admins).
+   * Trackso plants resolve to their raw site key; IO.Next plants to a
+   * namespaced `IN:<externalKey>` so both providers share one allow-list.
    */
   async getAccessibleSiteKeys(user: AccessUser): Promise<string[] | null> {
     if (user.role === Role.ADMIN) return null;
@@ -44,11 +45,15 @@ export class PlantAccessService {
     if (ids.length === 0) return [];
     const plants = await this.prisma.plant.findMany({
       where: { id: { in: ids } },
-      select: { name: true },
+      select: { name: true, dataSource: true, externalKey: true },
     });
     const keys = new Set<string>();
     for (const p of plants) {
-      const key = siteKeyForPlantName(p.name);
+      if (p.dataSource === 'IONEXT') {
+        if (p.externalKey) keys.add(`IN:${p.externalKey}`);
+        continue;
+      }
+      const key = p.externalKey ?? siteKeyForPlantName(p.name);
       if (key) keys.add(key);
     }
     return [...keys];

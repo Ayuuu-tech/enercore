@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { ITelemetryRepository, TelemetrySeriesPoint } from '../domain/telemetry.repository.interface';
 import { TelemetryEntity } from '../domain/telemetry.entity';
 import { TracksoSyncService, TracksoDashboardCache } from './trackso-sync.service';
+import { IoNextSyncService } from './ionext-sync.service';
 
 @Injectable()
 export class TelemetryService {
@@ -9,6 +10,7 @@ export class TelemetryService {
     @Inject('ITelemetryRepository')
     private readonly telemetryRepository: ITelemetryRepository,
     private readonly tracksoSync: TracksoSyncService,
+    private readonly ioNextSync: IoNextSyncService,
   ) {}
 
   async logTelemetry(dto: Partial<TelemetryEntity>): Promise<TelemetryEntity> {
@@ -30,9 +32,13 @@ export class TelemetryService {
    */
   getDashboardStats(allowedSiteKeys: string[] | null = null): TracksoDashboardCache {
     const cache = this.tracksoSync.getDashboardCache();
-    if (allowedSiteKeys === null) return cache;
+    // Merge both providers into one plant map keyed by their dashboard keys.
+    const merged: TracksoDashboardCache['plants'] = {
+      ...cache.plants,
+      ...this.ioNextSync.getDashboardPlants(),
+    };
 
-    const allowed = new Set(allowedSiteKeys);
+    const allowed = allowedSiteKeys ? new Set(allowedSiteKeys) : null;
     const plants: TracksoDashboardCache['plants'] = {};
     let totalPower = 0;
     let todayYield = 0;
@@ -40,8 +46,8 @@ export class TelemetryService {
     let cufSum = 0;
     let cufCount = 0;
     const allowedNames: string[] = [];
-    for (const [key, p] of Object.entries(cache.plants)) {
-      if (!allowed.has(key)) continue;
+    for (const [key, p] of Object.entries(merged)) {
+      if (allowed && !allowed.has(key)) continue;
       plants[key] = p;
       allowedNames.push(p.siteName);
       totalPower += p.livePower;
@@ -69,8 +75,7 @@ export class TelemetryService {
   }
 
   async getSeriesByPlant(plantId: string, hours: number): Promise<TelemetrySeriesPoint[]> {
-    // Aim for ~48 points regardless of window length; sync runs every 2 minutes.
-    const bucketSeconds = Math.max(120, Math.round((hours * 3600) / 48));
-    return this.telemetryRepository.getSeriesByPlantId(plantId, hours, bucketSeconds);
+    // Aim for ~48 points; the repository sizes buckets to the data available.
+    return this.telemetryRepository.getSeriesByPlantId(plantId, hours, 48);
   }
 }

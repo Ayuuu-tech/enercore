@@ -10,15 +10,18 @@ class PlantSite {
   const PlantSite({required this.name, required this.position, this.active = true});
 }
 
-/// Known real coordinates for the Trackso sites (Bawal, Haryana). Matched by
-/// name so the dashboard can place markers without a schema change.
+/// Known real coordinates for each monitored site. Matched by name so the
+/// dashboard can place markers without a schema change.
 LatLng? plantCoordinatesFor(String name) {
   final n = name.toLowerCase();
   if (n.contains('hollister') || n.contains('alpha')) {
-    return const LatLng(28.0965752, 76.6055277);
+    return const LatLng(28.0965752, 76.6055277); // Bawal, Haryana
   }
   if (n.contains('caparo') || n.contains('beta')) {
-    return const LatLng(28.0902152, 76.5808786);
+    return const LatLng(28.0902152, 76.5808786); // Bawal, Haryana
+  }
+  if (n.contains('hella')) {
+    return const LatLng(28.477844506643795, 76.94851912550605);
   }
   return null;
 }
@@ -66,6 +69,17 @@ LatLng _center(List<PlantSite> sites) {
   return LatLng(lat / sites.length, lng / sites.length);
 }
 
+/// Frames every site at once. The sites are tens of km apart (Bawal + Manesar),
+/// so a fixed zoom would push some markers off-screen.
+CameraFit? _fitAllSites(List<PlantSite> sites, double padding) {
+  if (sites.length < 2) return null; // single/no site: fall back to fixed zoom
+  return CameraFit.bounds(
+    bounds: LatLngBounds.fromPoints(sites.map((s) => s.position).toList()),
+    padding: EdgeInsets.all(padding),
+    maxZoom: 15,
+  );
+}
+
 /// Compact, tappable satellite preview shown inside the dashboard card.
 class PlantMapPreview extends StatelessWidget {
   final List<PlantSite> sites;
@@ -86,6 +100,7 @@ class PlantMapPreview extends StatelessWidget {
                 options: MapOptions(
                   initialCenter: _center(sites),
                   initialZoom: 12,
+                  initialCameraFit: _fitAllSites(sites, 34),
                   // Preview is non-interactive; tap opens the full map.
                   interactionOptions: const InteractionOptions(flags: InteractiveFlag.none),
                 ),
@@ -145,6 +160,7 @@ class _PlantMapFullScreenState extends State<PlantMapFullScreen> {
             options: MapOptions(
               initialCenter: _center(widget.sites),
               initialZoom: 13,
+              initialCameraFit: _fitAllSites(widget.sites, 60),
               minZoom: 3,
               maxZoom: 19,
             ),

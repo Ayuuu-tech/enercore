@@ -173,12 +173,27 @@ model Vendor {
   products    Product[]
 }
 
+enum PlantDataSource {
+  TRACKSO
+  IONEXT
+}
+
 model Plant {
-  id           String      @id @default(uuid())
+  id           String          @id @default(uuid())
   name         String
   location     String
   peakCapacity Float
   status       String
+  // Where this plant's live data comes from, and its key in that provider
+  // (Trackso siteKey or IO.Next plant pk).
+  dataSource   PlantDataSource @default(TRACKSO)
+  externalKey  String?
+  // Billing profile — printed on the monthly solar bill of supply.
+  tariff          Float   @default(0) // Rs per kWh, per the PPA
+  legalName       String? // "M/s HELLA INDIA AUTOMOTIVE PRIVATE LIMITED"
+  gstin           String?
+  billingAddress  String?
+  offtakerCode    String?
   ownerId      String
   owner        User        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   createdAt    DateTime    @default(now())
@@ -188,6 +203,23 @@ model Plant {
   telemetry    Telemetry[]
   invoices     Invoice[]
   accessGrants PlantAccess[]
+  dailyEnergy  DailyEnergy[]
+}
+
+// One row per plant per calendar day (IST). Providers that don't expose
+// historical data (e.g. IO.Next) get their day's energy snapshotted here on
+// every sync, so week/month/year totals can be served from our own database.
+model DailyEnergy {
+  id          String   @id @default(uuid())
+  plantId     String
+  plant       Plant    @relation(fields: [plantId], references: [id], onDelete: Cascade)
+  day         String   // IST calendar day, "YYYY-MM-DD"
+  energyKwh   Float    @default(0)
+  lifetimeMwh Float    @default(0)
+  updatedAt   DateTime @updatedAt
+
+  @@unique([plantId, day])
+  @@index([plantId, day])
 }
 
 model Panel {
@@ -212,28 +244,42 @@ model Telemetry {
   temperature Float
   generation  Float
   timestamp   DateTime @default(now())
-  panelId     String
-  panel       Panel    @relation(fields: [panelId], references: [id], onDelete: Cascade)
+  // Null for providers that report at inverter/plant level rather than
+  // per-panel (e.g. IO.Next). Series queries group by plantId only.
+  panelId     String?
+  panel       Panel?   @relation(fields: [panelId], references: [id], onDelete: Cascade)
   plantId     String
   plant       Plant    @relation(fields: [plantId], references: [id], onDelete: Cascade)
 
   @@index([timestamp])
+  @@index([plantId, timestamp])
 }
 
 model Invoice {
   id            String        @id @default(uuid())
   invoiceNumber String        @unique
   amount        Float
-  period        String
+  period        String // "May 2026" — the billed calendar month
   status        InvoiceStatus @default(PENDING)
   dueDate       DateTime
   paidAt        DateTime?
+  // Solar bill of supply details (null on legacy/manual invoices).
+  units         Float?    // billed generation, kWh
+  tariff        Float?    // Rs per kWh applied
+  billDate      DateTime? // 1st of the month following the period
+  periodStart   DateTime?
+  periodEnd     DateTime?
+  startReading  Float? // cumulative plant generation at period start, kWh
+  endReading    Float? // cumulative plant generation at period end, kWh
   userId        String
   user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   plantId       String?
   plant         Plant?        @relation(fields: [plantId], references: [id], onDelete: SetNull)
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
+
+  // One bill per plant per month — makes generation safely re-runnable.
+  @@unique([plantId, period])
 }
 
 model Product {

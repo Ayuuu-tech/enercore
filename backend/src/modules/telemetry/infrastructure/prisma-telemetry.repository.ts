@@ -22,10 +22,16 @@ export class PrismaTelemetryRepository implements ITelemetryRepository {
   }
 
   async create(telemetry: Partial<TelemetryEntity>): Promise<TelemetryEntity> {
+    // This path logs a reading against a specific panel; plant-level providers
+    // (IO.Next) write their rows directly with a null panelId.
+    const panelId = telemetry.panelId;
+    if (!panelId) {
+      throw new Error('panelId is required to log panel telemetry');
+    }
     const created = await this.prisma.$transaction(async (tx) => {
-      const panel = await tx.panel.findUnique({ where: { id: telemetry.panelId } });
+      const panel = await tx.panel.findUnique({ where: { id: panelId } });
       if (!panel) {
-        throw new Error(`Panel with ID ${telemetry.panelId} not found`);
+        throw new Error(`Panel with ID ${panelId} not found`);
       }
       const t = await tx.telemetry.create({
         data: {
@@ -33,13 +39,13 @@ export class PrismaTelemetryRepository implements ITelemetryRepository {
           current: telemetry.current!,
           temperature: telemetry.temperature!,
           generation: telemetry.generation!,
-          panelId: telemetry.panelId!,
+          panelId,
           plantId: panel.plantId,
           timestamp: telemetry.timestamp,
         },
       });
       await tx.panel.update({
-        where: { id: telemetry.panelId },
+        where: { id: panelId },
         data: {
           voltage: telemetry.voltage!,
           current: telemetry.current!,
@@ -83,7 +89,21 @@ export class PrismaTelemetryRepository implements ITelemetryRepository {
     return latestLogs.map(l => this.mapToEntity(l));
   }
 
-  async getSeriesByPlantId(plantId: string, hours: number, bucketSeconds: number): Promise<TelemetrySeriesPoint[]> {
+  async getSeriesByPlantId(plantId: string, hours: number, targetPoints: number): Promise<TelemetrySeriesPoint[]> {
+    // Size the bucket to the data we actually have, not the requested window.
+    // After downtime the window may hold only a few minutes of readings; using
+    // hours/targetPoints would collapse them all into one bucket and the chart
+    // would sit empty until a full bucket's worth of time had passed.
+    const [span] = await this.prisma.$queryRaw<{ span: number | null }[]>`
+      SELECT extract(epoch FROM (max("timestamp") - min("timestamp")))::float AS span
+      FROM "Telemetry"
+      WHERE "plantId" = ${plantId}
+        AND "timestamp" > now() - make_interval(hours => ${hours})
+    `;
+    const spanSeconds = span?.span ?? 0;
+    // Sync cadence is 2 minutes, so buckets never need to be finer than that.
+    const bucketSeconds = Math.max(120, Math.round(spanSeconds / targetPoints) || 120);
+
     // Telemetry rows are per-panel. First collapse each sync cycle (grouped to
     // the minute) into a plant-level total, then average those cycle totals over
     // the display bucket. This avoids summing instantaneous power across time

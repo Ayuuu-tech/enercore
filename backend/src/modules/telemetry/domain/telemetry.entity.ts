@@ -5,7 +5,8 @@ export class TelemetryEntity {
   temperature: number;
   generation: number;
   timestamp: Date;
-  panelId: string;
+  /** Null for inverter/plant-level providers (e.g. IO.Next). */
+  panelId: string | null;
   plantId: string;
 
   constructor(partial: Partial<TelemetryEntity>) {

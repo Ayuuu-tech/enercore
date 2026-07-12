@@ -31,6 +31,12 @@ class HttpAuthRepository implements AuthRepository {
   static String? _workingBase;
   static const _timeout = Duration(seconds: 4);
 
+  // Production/staging API URL baked in at build time:
+  //   flutter build apk --release --dart-define=API_URL=https://api.yourdomain.com/api
+  // When set, it overrides every dev fallback below, so release builds always
+  // hit the hosted backend regardless of platform.
+  static const _envApi = String.fromEnvironment('API_URL');
+
   // PC's LAN IP (same WiFi) — used when the app runs on a real device.
   // If your PC's IP changes, update this or use the ⚙ gear on the login screen.
   static const _lanApi = 'http://192.168.1.10:3000/api';
@@ -79,6 +85,7 @@ class HttpAuthRepository implements AuthRepository {
     if (customUrl != null && customUrl!.isNotEmpty) {
       return customUrl!;
     }
+    if (_envApi.isNotEmpty) return _envApi;
     if (_workingBase != null) return _workingBase!;
     if (kIsWeb) {
       return 'http://localhost:3000/api';
@@ -96,6 +103,7 @@ class HttpAuthRepository implements AuthRepository {
     if (customUrl != null && customUrl!.isNotEmpty) {
       return [customUrl!];
     }
+    if (_envApi.isNotEmpty) return [_envApi];
     if (_workingBase != null) return [_workingBase!];
     if (kIsWeb) return ['http://localhost:3000/api'];
     try {

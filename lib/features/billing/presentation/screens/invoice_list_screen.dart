@@ -1,7 +1,11 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../../../core/widgets/user_avatar.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
+import '../../data/billing_repository.dart';
 import '../../domain/invoice_model.dart';
 import '../../application/billing_controller.dart';
 
@@ -14,7 +18,29 @@ class InvoiceListScreen extends ConsumerStatefulWidget {
 
 class _InvoiceListScreenState extends ConsumerState<InvoiceListScreen> {
   int _selectedNav = 3; // Billing tab active
-  int _selectedPaymentMethod = 0;
+  String? _downloadingId;
+
+  /// Fetches the bill PDF and hands it to the device's PDF viewer.
+  Future<void> _downloadBill(String invoiceId) async {
+    setState(() => _downloadingId = invoiceId);
+    try {
+      final bill = await ref.read(billingRepositoryProvider).downloadBillPdf(invoiceId);
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/${bill.filename}');
+      await file.writeAsBytes(bill.bytes);
+      await OpenFilex.open(file.path);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFFEF4444),
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _downloadingId = null);
+    }
+  }
 
   // Premium Design System
   static const _bg = Color(0xFFF4F6F8);
@@ -55,8 +81,6 @@ class _InvoiceListScreenState extends ConsumerState<InvoiceListScreen> {
                       ? 'Paid on ${_formatDate(paidInvoices.first.paidAt ?? paidInvoices.first.dueDate)}'
                       : 'No payments';
 
-                  final pendingInvoices = invoices.where((inv) => inv.status != 'PAID').toList();
-                  final nextPayableInvoice = pendingInvoices.isNotEmpty ? pendingInvoices.first : null;
 
                   return RefreshIndicator(
                     onRefresh: () => ref.read(billingControllerProvider.notifier).fetchInvoices(),
@@ -72,11 +96,7 @@ class _InvoiceListScreenState extends ConsumerState<InvoiceListScreen> {
                             const SizedBox(height: 16),
                             _statsRow(totalDue, lastPayment, lastPaymentDate),
                             const SizedBox(height: 18),
-                            _paymentMethods(),
-                            const SizedBox(height: 18),
                             _invoiceHistoryCard(invoices),
-                            const SizedBox(height: 18),
-                            _payableAmountPanel(nextPayableInvoice),
                             const SizedBox(height: 24),
                             _footer(),
                             const SizedBox(height: 12),
@@ -224,23 +244,6 @@ class _InvoiceListScreenState extends ConsumerState<InvoiceListScreen> {
                   '₹${totalDue.toInt()}',
                   style: const TextStyle(color: _slateDark, fontSize: 20, fontWeight: FontWeight.w800),
                 ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  height: 36,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _teal,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      padding: EdgeInsets.zero,
-                      disabledBackgroundColor: Colors.grey.shade300,
-                    ),
-                    onPressed: null, // Lock button, payment triggers from Payable Panel below
-                    child: const Text('Pay Now', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
-                  ),
-                ),
               ],
             ),
           ),
@@ -300,84 +303,6 @@ class _InvoiceListScreenState extends ConsumerState<InvoiceListScreen> {
   }
 
   // ── Payment Methods ────────────────────────────────────────────────────────
-  Widget _paymentMethods() {
-    final methods = [
-      (Icons.account_balance_wallet_outlined, 'UPI', 'PhonePe, GPay, BHIM'),
-      (Icons.language_rounded, 'Net Banking', 'All major Indian banks'),
-      (Icons.credit_card_rounded, 'Credit / Debit Card', 'Visa, Mastercard, RuPay'),
-      (Icons.sync_rounded, 'Auto Debit', 'Setup e-NACH/ECS'),
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Payment Methods',
-          style: TextStyle(color: _slateDark, fontSize: 13, fontWeight: FontWeight.w800),
-        ),
-        const SizedBox(height: 10),
-        ...methods.asMap().entries.map((entry) {
-          final idx = entry.key;
-          final item = entry.value;
-          final active = _selectedPaymentMethod == idx;
-          return GestureDetector(
-            onTap: () => setState(() => _selectedPaymentMethod = idx),
-            child: Container(
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: active ? _teal : _cardBorder, width: active ? 1.5 : 1),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: active ? const Color(0xFFD1FAE5) : const Color(0xFFF1F5F9),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(item.$1, color: active ? _teal : _slateLight, size: 18),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          item.$2,
-                          style: const TextStyle(color: _slateDark, fontSize: 12.5, fontWeight: FontWeight.w700),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          item.$3,
-                          style: const TextStyle(color: _slateLight, fontSize: 10, fontWeight: FontWeight.w500),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    width: 18,
-                    height: 18,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: active ? _teal : _slateLight.withAlpha((0.5 * 255).toInt()),
-                        width: active ? 5.5 : 1.5,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }),
-      ],
-    );
-  }
-
   // ── Invoice History Card ───────────────────────────────────────────────────
   Widget _invoiceHistoryCard(List<InvoiceModel> invoices) {
     return _card_(
@@ -460,6 +385,20 @@ class _InvoiceListScreenState extends ConsumerState<InvoiceListScreen> {
                         ),
                       ),
                       _statusBadge(invoice.status),
+                      const SizedBox(width: 6),
+                      GestureDetector(
+                        onTap: _downloadingId == invoice.id ? null : () => _downloadBill(invoice.id),
+                        child: SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: _downloadingId == invoice.id
+                              ? const Padding(
+                                  padding: EdgeInsets.all(4),
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: _teal),
+                                )
+                              : const Icon(Icons.download_rounded, size: 18, color: _teal),
+                        ),
+                      ),
                     ],
                   ),
                 )),
@@ -504,114 +443,6 @@ class _InvoiceListScreenState extends ConsumerState<InvoiceListScreen> {
   }
 
   // ── Payable Amount Panel ───────────────────────────────────────────────────
-  Widget _payableAmountPanel(InvoiceModel? invoice) {
-    if (invoice == null) {
-      return _card_(
-        child: const Center(
-          child: Padding(
-            padding: EdgeInsets.symmetric(vertical: 12),
-            child: Text(
-              'No pending payments. All clear! 🎉',
-              style: TextStyle(color: _teal, fontSize: 13, fontWeight: FontWeight.w700),
-            ),
-          ),
-        ),
-      );
-    }
-
-    return _card_(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'PAYABLE AMOUNT',
-            style: TextStyle(color: _slateLight, fontSize: 9.5, fontWeight: FontWeight.w700, letterSpacing: 0.5),
-          ),
-          const SizedBox(height: 6),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF1F5F9),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  '₹ ${invoice.amount.toInt()}',
-                  style: const TextStyle(color: _slateDark, fontSize: 13, fontWeight: FontWeight.w800),
-                ),
-                Text(
-                  invoice.invoiceNumber,
-                  style: const TextStyle(color: _slateLight, fontSize: 11, fontWeight: FontWeight.w600),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-          SizedBox(
-            width: double.infinity,
-            height: 48,
-            child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _teal,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              onPressed: () async {
-                final scaffoldMessenger = ScaffoldMessenger.of(context);
-                try {
-                  scaffoldMessenger.showSnackBar(
-                    const SnackBar(
-                      content: Text('Processing secure payment...'),
-                      duration: Duration(seconds: 1),
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
-                  await ref.read(billingControllerProvider.notifier).payInvoice(invoice.id);
-                  scaffoldMessenger.showSnackBar(
-                    const SnackBar(
-                      content: Text('Payment Successful!'),
-                      backgroundColor: Colors.green,
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
-                } catch (e) {
-                  scaffoldMessenger.showSnackBar(
-                    SnackBar(
-                      content: Text('Payment failed: $e'),
-                      backgroundColor: Colors.redAccent,
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
-                }
-              },
-              icon: const Icon(Icons.lock_outline_rounded, size: 18),
-              label: Text(
-                'Pay ₹${invoice.amount.toInt()}',
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: const [
-              Icon(Icons.shield_outlined, color: _slateLight, size: 12),
-              SizedBox(width: 4),
-              Text(
-                'SECURE 256-BIT SSL ENCRYPTED PAYMENT',
-                style: TextStyle(color: _slateLight, fontSize: 9, fontWeight: FontWeight.w700, letterSpacing: 0.3),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
   // ── Footer ─────────────────────────────────────────────────────────────────
   Widget _footer() {
     return Column(

@@ -5,6 +5,8 @@ import { PrismaTelemetryRepository } from './infrastructure/prisma-telemetry.rep
 import { PrismaModule } from '../../common/prisma/prisma.module';
 import { TracksoSyncService } from './application/trackso-sync.service';
 import { TracksoReportService } from './application/trackso-report.service';
+import { IoNextService } from './application/ionext.service';
+import { IoNextSyncService } from './application/ionext-sync.service';
 
 @Module({
   imports: [PrismaModule],
@@ -13,6 +15,8 @@ import { TracksoReportService } from './application/trackso-report.service';
     TelemetryService,
     TracksoSyncService,
     TracksoReportService,
+    IoNextService,
+    IoNextSyncService,
     {
       provide: 'ITelemetryRepository',
       useClass: PrismaTelemetryRepository,

@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { PanelStatus } from '@prisma/client';
 import { allSiteKeys } from '../../../common/trackso/site-map';
+import { istDay } from '../../../common/util/ist-day';
 
 export interface TracksoPlantMetrics {
   siteName: string;
@@ -262,6 +263,15 @@ export class TracksoSyncService implements OnModuleInit {
 
         let dbStatus = 'Active';
         if (targetPlant) {
+          // Snapshot today's energy — the monthly bill sums these daily rows,
+          // using the same source for every provider.
+          const day = istDay(Date.now());
+          await this.prisma.dailyEnergy.upsert({
+            where: { plantId_day: { plantId: targetPlant.id, day } },
+            update: { energyKwh: dailyEnergy, lifetimeMwh: totalEnergy },
+            create: { plantId: targetPlant.id, day, energyKwh: dailyEnergy, lifetimeMwh: totalEnergy },
+          });
+
           const panels = await this.prisma.panel.findMany({
             where: { plantId: targetPlant.id }
           });

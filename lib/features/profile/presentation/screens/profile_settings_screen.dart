@@ -552,7 +552,7 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
         ),
         onPressed: () async {
           await ref.read(authControllerProvider.notifier).logout();
-          if (mounted) context.go('/role-selection');
+          if (mounted) context.go('/login');
         },
         icon: const Icon(Icons.logout_rounded, size: 16),
         label: const Text('Logout', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),

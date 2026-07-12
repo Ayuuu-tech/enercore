@@ -6,9 +6,9 @@ import '../../features/auth/presentation/screens/auth/splash_screen.dart';
 import '../../features/auth/presentation/screens/auth/login_screen.dart';
 import '../../features/auth/presentation/screens/auth/register_screen.dart';
 import '../../features/auth/presentation/screens/auth/forgot_password_screen.dart';
-import '../../features/auth/presentation/screens/auth/role_selection_screen.dart';
 import '../../features/auth/presentation/screens/onboarding/onboarding_screen.dart';
 import '../../features/dashboard/presentation/screens/client_dashboard_screen.dart';
+import '../../features/dashboard/presentation/screens/alerts_screen.dart';
 import '../../features/telemetry/presentation/screens/solar_grid_screen.dart';
 import '../../features/telemetry/presentation/screens/telemetry_dashboard_screen.dart';
 import '../../features/telemetry/presentation/screens/reports_screen.dart';
@@ -24,6 +24,7 @@ import '../../features/admin/presentation/screens/admin_users_screen.dart';
 import '../../features/admin/presentation/screens/admin_subscriptions_screen.dart';
 import '../../features/admin/presentation/screens/admin_plants_screen.dart';
 import '../../features/admin/presentation/screens/admin_audit_screen.dart';
+import '../../features/admin/presentation/screens/admin_tickets_screen.dart';
 import '../../features/admin/presentation/screens/admin_features_screen.dart';
 import '../../features/vendor/presentation/screens/vendor_dashboard_screen.dart';
 import '../../features/vendor/presentation/screens/vendor_products_screen.dart';
@@ -34,7 +35,7 @@ import '../../features/vendor/domain/vendor_models.dart';
 import '../../features/profile/presentation/screens/profile_settings_screen.dart';
 
 final _authRoutes = <String>{
-  '/splash', '/onboarding', '/role-selection', '/login', '/register', '/forgot-password',
+  '/splash', '/onboarding', '/login', '/register', '/forgot-password',
 };
 
 // Client feature routes gated by per-user module permissions. Admins bypass.
@@ -107,10 +108,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       builder: (context, state) => const OnboardingScreen(),
     ),
     GoRoute(
-      path: '/role-selection',
-      builder: (context, state) => const RoleSelectionScreen(),
-    ),
-    GoRoute(
       path: '/login',
       builder: (context, state) {
         final role = state.uri.queryParameters['role'] ?? 'user';
@@ -164,6 +161,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     GoRoute(
       path: '/admin-audit',
       builder: (context, state) => const AdminAuditScreen(),
+    ),
+    GoRoute(
+      path: '/admin-tickets',
+      builder: (context, state) => const AdminTicketsScreen(),
+    ),
+    GoRoute(
+      path: '/alerts',
+      builder: (context, state) => const AlertsScreen(),
     ),
     GoRoute(
       path: '/admin-features',

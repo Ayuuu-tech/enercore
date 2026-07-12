@@ -856,7 +856,7 @@ class _ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
                 ),
               ),
               GestureDetector(
-                onTap: () {},
+                onTap: () => context.push('/alerts'),
                 child: const Text(
                   'See All',
                   style: TextStyle(
@@ -875,7 +875,8 @@ class _ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
               child: Text('No recent system alerts.', style: TextStyle(color: _slateLight, fontSize: 12)),
             )
           else
-            ...data.alerts.map((a) {
+            // Only the most recent few here; "See All" opens the full list.
+            ...data.alerts.take(3).map((a) {
               Color alertColor = _teal;
               IconData icon = Icons.info_outline;
               if (a.type == 'WARNING' || a.type == 'CRITICAL') {

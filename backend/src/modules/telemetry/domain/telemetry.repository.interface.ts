@@ -12,5 +12,6 @@ export interface ITelemetryRepository {
   create(telemetry: Partial<TelemetryEntity>): Promise<TelemetryEntity>;
   findByPlantId(plantId: string, limit?: number): Promise<TelemetryEntity[]>;
   findLatestByPlantId(plantId: string): Promise<TelemetryEntity[]>;
-  getSeriesByPlantId(plantId: string, hours: number, bucketSeconds: number): Promise<TelemetrySeriesPoint[]>;
+  /** Bucket width is derived from the data actually present in the window. */
+  getSeriesByPlantId(plantId: string, hours: number, targetPoints: number): Promise<TelemetrySeriesPoint[]>;
 }

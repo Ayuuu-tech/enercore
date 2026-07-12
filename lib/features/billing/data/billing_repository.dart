@@ -32,6 +32,28 @@ class BillingRepository {
     }
   }
 
+  /// Downloads the solar bill of supply for an invoice. Returns file bytes+name.
+  Future<({List<int> bytes, String filename})> downloadBillPdf(String id) async {
+    final token = _authRepository.token;
+    final response = await httpGet(
+      Uri.parse('${_authRepository.baseUrl}/billing/$id/pdf'),
+      headers: {if (token != null) 'Authorization': 'Bearer $token'},
+    );
+
+    if (response.statusCode == 200) {
+      final disposition = response.headers['content-disposition'] ?? '';
+      final match = RegExp('filename="(.+)"').firstMatch(disposition);
+      return (bytes: response.bodyBytes, filename: match?.group(1) ?? 'enercore-bill.pdf');
+    }
+
+    String message = 'Failed to download bill: ${response.statusCode}';
+    try {
+      final err = jsonDecode(response.body);
+      if (err['message'] != null) message = err['message'].toString();
+    } catch (_) {}
+    throw Exception(message);
+  }
+
   Future<InvoiceModel> payInvoice(String id) async {
     final token = _authRepository.token;
     final response = await httpPost(

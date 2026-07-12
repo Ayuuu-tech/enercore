@@ -281,6 +281,8 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
           _divider(),
           _manageRow(Icons.insights_rounded, 'Plant Stats', 'Open plant dashboards & telemetry', '/admin-features'),
           _divider(),
+          _manageRow(Icons.confirmation_number_rounded, 'Support Tickets', 'All tickets raised by clients', '/admin-tickets'),
+          _divider(),
           _manageRow(Icons.history_rounded, 'Audit Log', 'Trail of admin actions', '/admin-audit'),
         ],
       ),

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   ForbiddenException,
@@ -6,9 +7,13 @@ import {
   Param,
   Post,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { BillingService } from '../application/billing.service';
+import { BillGenerationService } from '../application/bill-generation.service';
+import { BillPdfService } from '../application/bill-pdf.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
@@ -20,7 +25,45 @@ import { Role } from '@prisma/client';
 @Controller('billing')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class BillingController {
-  constructor(private readonly billingService: BillingService) {}
+  constructor(
+    private readonly billingService: BillingService,
+    private readonly billGeneration: BillGenerationService,
+    private readonly billPdf: BillPdfService,
+  ) {}
+
+  /** Download the solar bill of supply for an invoice, as a PDF. */
+  @Get(':id/pdf')
+  async downloadPdf(
+    @Param('id') id: string,
+    @CurrentUser() user: UserEntity,
+    @Res() res: Response,
+  ) {
+    const invoice = await this.billingService.findById(id);
+    if (user.role !== Role.ADMIN && invoice.userId !== user.id) {
+      throw new ForbiddenException('You do not have permission to view this invoice');
+    }
+    const { buffer, filename } = await this.billPdf.generate(id);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': buffer.length,
+    });
+    res.send(buffer);
+  }
+
+  /**
+   * Manually (re-)run bill generation for a month, e.g. "2026-06".
+   * Safe to call repeatedly — already-billed plants are skipped.
+   */
+  @Post('generate')
+  @Roles(Role.ADMIN)
+  async generate(@Body() body: { period?: string }) {
+    const period = body?.period;
+    if (!period || !/^\d{4}-\d{2}$/.test(period)) {
+      throw new BadRequestException('period must be "YYYY-MM"');
+    }
+    return this.billGeneration.generateForMonth(period);
+  }
 
   @Get()
   async findAll(

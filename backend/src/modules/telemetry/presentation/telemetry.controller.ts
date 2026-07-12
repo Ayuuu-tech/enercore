@@ -8,6 +8,9 @@ import { RolesGuard } from '../../../common/guards/roles.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { UserEntity } from '../../users/domain/user.entity';
 import { PlantAccessService } from '../../../common/access/plant-access.service';
+import { PrismaService } from '../../../common/prisma/prisma.service';
+import { IoNextSyncService } from '../application/ionext-sync.service';
+import { IoNextService } from '../application/ionext.service';
 
 @Controller('telemetry')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -16,6 +19,9 @@ export class TelemetryController {
     private readonly telemetryService: TelemetryService,
     private readonly tracksoReportService: TracksoReportService,
     private readonly plantAccess: PlantAccessService,
+    private readonly prisma: PrismaService,
+    private readonly ioNextSync: IoNextSyncService,
+    private readonly ioNext: IoNextService,
   ) {}
 
   @Post('reports/site')
@@ -29,11 +35,11 @@ export class TelemetryController {
       throw new BadRequestException('plantId and frequency are required');
     }
     await this.plantAccess.assertPlantAccess(user, plantId);
-    const { buffer, filename } = await this.tracksoReportService.generateSiteReport(
-      plantId,
-      frequency,
-      date ?? Date.now(),
-    );
+    const plant = await this.prisma.plant.findUnique({ where: { id: plantId } });
+    const { buffer, filename } =
+      plant?.dataSource === 'IONEXT' && plant.externalKey
+        ? await this.ioNext.generateReport(plant.externalKey, plant.id, plant.name, plant.peakCapacity, frequency)
+        : await this.tracksoReportService.generateSiteReport(plantId, frequency, date ?? Date.now());
     res.set({
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition': `attachment; filename="${filename}"`,
@@ -57,12 +63,28 @@ export class TelemetryController {
   @Get('period-yield')
   async getPeriodYield(@CurrentUser() user: UserEntity) {
     const allowed = await this.plantAccess.getAccessibleSiteKeys(user);
-    return this.tracksoReportService.getPeriodYields(allowed);
+    // Split the allow-list: Trackso site keys vs namespaced IO.Next keys.
+    const tracksoKeys = allowed === null ? null : allowed.filter((k) => !k.startsWith('IN:'));
+    const ioNextKeys = allowed === null ? null : allowed.filter((k) => k.startsWith('IN:'));
+    const [trackso, ioNext] = await Promise.all([
+      this.tracksoReportService.getPeriodYields(tracksoKeys),
+      this.ioNextSync.getPeriodContribution(ioNextKeys),
+    ]);
+    return {
+      day: parseFloat((trackso.day + ioNext.day).toFixed(1)),
+      week: parseFloat((trackso.week + ioNext.week).toFixed(1)),
+      month: parseFloat((trackso.month + ioNext.month).toFixed(1)),
+      year: parseFloat((trackso.year + ioNext.year).toFixed(1)),
+    };
   }
 
   @Get('plant/:plantId/devices')
   async getDevices(@Param('plantId') plantId: string, @CurrentUser() user: UserEntity) {
     await this.plantAccess.assertPlantAccess(user, plantId);
+    const plant = await this.prisma.plant.findUnique({ where: { id: plantId } });
+    if (plant?.dataSource === 'IONEXT' && plant.externalKey) {
+      return this.ioNextSync.getDevices(plantId, plant.externalKey);
+    }
     return this.tracksoReportService.getDevices(plantId);
   }
 
