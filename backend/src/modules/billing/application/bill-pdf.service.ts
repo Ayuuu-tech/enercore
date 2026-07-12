@@ -47,7 +47,7 @@ export class BillPdfService {
   async generate(invoiceId: string): Promise<{ buffer: Buffer; filename: string }> {
     const invoice = await this.prisma.invoice.findUnique({
       where: { id: invoiceId },
-      include: { plant: true },
+      include: { plant: true, meterReadings: { orderBy: { meterName: 'asc' } } },
     });
     if (!invoice) throw new NotFoundException(`Invoice ${invoiceId} not found`);
     if (!invoice.plant) throw new NotFoundException('Invoice has no plant attached');
@@ -272,38 +272,59 @@ export class BillPdfService {
 
     doc.fontSize(11).font('Helvetica-Bold').text('METER READINGS', L, 82);
 
-    // Site-level billing: one row for the plant's own cumulative counter.
     const headers = ['Meter', 'Start Reading', 'End Reading', 'Difference', 'MF', 'Adjustment', 'Total Units'];
     const widths = [58, 48, 48, 55, 26, 50, 55];
-    let x = L;
+    const tw = widths.reduce((a, b) => a + b, 0);
+    const ROW_H = 26;
     const top = 104;
-    doc.rect(L, top, widths.reduce((a, b) => a + b, 0), 26).fill(C.rowShade);
+
+    // One row per metered device. Falls back to a single plant-level row for
+    // bills raised before per-device counters were recorded.
+    const meters: {
+      meterName: string; startReading: number; endReading: number;
+      multiplier: number; adjustment: number; totalUnits: number;
+    }[] =
+      inv.meterReadings?.length > 0
+        ? inv.meterReadings
+        : [{
+            meterName: plant.name,
+            startReading: inv.startReading ?? 0,
+            endReading: inv.endReading ?? 0,
+            multiplier: 1,
+            adjustment: 0,
+            totalUnits: units,
+          }];
+
+    let x = L;
+    doc.rect(L, top, tw, ROW_H).fill(C.rowShade);
     doc.fontSize(6.8).font('Helvetica-Bold').fillColor(C.text);
     headers.forEach((h, i) => {
       doc.text(h, x + 2, top + 8, { width: widths[i] - 4, align: 'center' });
       x += widths[i];
     });
 
-    const diff = (inv.endReading ?? 0) - (inv.startReading ?? 0);
-    const row = [
-      plant.name,
-      (inv.startReading ?? 0).toFixed(0),
-      (inv.endReading ?? 0).toFixed(0),
-      diff.toFixed(3),
-      '1.00',
-      '0.00',
-      inr(units),
-    ];
-    x = L;
-    const ry = top + 26;
-    doc.fontSize(6.8).font('Helvetica').fillColor(C.text);
-    row.forEach((v, i) => {
-      doc.text(v, x + 2, ry + 8, { width: widths[i] - 4, align: 'center' });
-      x += widths[i];
-    });
+    let ry = top + ROW_H;
+    for (const m of meters) {
+      const diff = m.endReading - m.startReading;
+      const cells = [
+        m.meterName,
+        m.startReading.toFixed(0),
+        m.endReading.toFixed(0),
+        diff.toFixed(3),
+        m.multiplier.toFixed(2),
+        m.adjustment.toFixed(2),
+        inr(m.totalUnits),
+      ];
+      x = L;
+      doc.fontSize(6.8).font('Helvetica').fillColor(C.text);
+      cells.forEach((v, i) => {
+        doc.text(v, x + 2, ry + 9, { width: widths[i] - 4, align: 'center' });
+        x += widths[i];
+      });
+      ry += ROW_H;
+    }
 
-    const tw = widths.reduce((a, b) => a + b, 0);
-    const ty = ry + 26;
+    const ty = ry;
     doc.rect(L, ty, tw, 20).fill(C.highlight);
     doc.fontSize(7).font('Helvetica-Bold').fillColor(C.text);
     doc.text('Total generation', L + 2, ty + 7, { width: tw - widths[6] - 4, align: 'center' });
@@ -311,7 +332,9 @@ export class BillPdfService {
 
     // Grid lines
     doc.lineWidth(0.6).strokeColor('#666666');
-    for (let r = 0; r <= 3; r++) doc.moveTo(L, top + r * 26).lineTo(L + tw, top + r * 26).stroke();
+    for (let r = 0; r <= meters.length + 1; r++) {
+      doc.moveTo(L, top + r * ROW_H).lineTo(L + tw, top + r * ROW_H).stroke();
+    }
     doc.moveTo(L, ty + 20).lineTo(L + tw, ty + 20).stroke();
     x = L;
     for (let i = 0; i <= widths.length; i++) {

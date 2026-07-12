@@ -15,6 +15,8 @@ export interface ProviderDevice {
   capacity: number | null;
   activePowerKw: number;
   dailyEnergyKwh: number;
+  /** Cumulative generation counter (kWh); 0 when the provider doesn't expose one. */
+  totalEnergyKwh: number;
   acVoltage: number;
   acCurrent: number;
   acFrequency: number;
@@ -151,6 +153,7 @@ export class IoNextService {
         capacity: this.capacityFromName(name),
         activePowerKw: parseFloat(power.toFixed(2)),
         dailyEnergyKwh: parseFloat(today.toFixed(1)),
+        totalEnergyKwh: parseFloat(this.num(v.Tot_Energy).toFixed(1)),
         acVoltage: parseFloat(avgV.toFixed(1)),
         acCurrent: parseFloat(sumA.toFixed(1)),
         acFrequency: parseFloat(this.num(v.Freq).toFixed(2)),

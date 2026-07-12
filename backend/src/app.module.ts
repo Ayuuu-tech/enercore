@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -21,6 +23,8 @@ import { AdminModule } from './modules/admin/admin.module';
 
 @Module({
   imports: [
+    // Global rate limit. Auth routes tighten this further with @Throttle.
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
     PlantAccessModule,
@@ -38,6 +42,10 @@ import { AdminModule } from './modules/admin/admin.module';
     AdminModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    // Apply the rate limiter to every route.
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+  ],
 })
 export class AppModule {}

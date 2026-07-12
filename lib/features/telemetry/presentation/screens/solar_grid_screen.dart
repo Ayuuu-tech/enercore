@@ -20,7 +20,6 @@ class _SolarGridScreenState extends ConsumerState<SolarGridScreen> {
 
   List<PlantModel> _plants = [];
   PlantModel? _plant;
-  List<PanelModel> _panels = [];
   List<DeviceModel> _devices = [];
   List<TelemetrySeriesPoint> _series = [];
   bool _loading = true;
@@ -69,18 +68,14 @@ class _SolarGridScreenState extends ConsumerState<SolarGridScreen> {
       final plant = _plant ?? _plants.first;
       final telemetryRepo = ref.read(telemetryRepositoryProvider);
       final results = await Future.wait<dynamic>([
-        repo.getPanels(plant.id),
         telemetryRepo.getSeries(plant.id, 6),
         telemetryRepo.getDevices(plant.id),
       ]);
-      final panels = results[0] as List<PanelModel>;
-      panels.sort((a, b) => a.row != b.row ? a.row.compareTo(b.row) : a.column.compareTo(b.column));
       if (!mounted) return;
       setState(() {
         _plant = plant;
-        _panels = panels;
-        _series = results[1] as List<TelemetrySeriesPoint>;
-        _devices = results[2] as List<DeviceModel>;
+        _series = results[0] as List<TelemetrySeriesPoint>;
+        _devices = results[1] as List<DeviceModel>;
         _loading = false;
         _error = null;
       });
@@ -344,9 +339,8 @@ class _SolarGridScreenState extends ConsumerState<SolarGridScreen> {
     final generation = totalPowerKw >= 1000
         ? '${(totalPowerKw / 1000).toStringAsFixed(2)}MW'
         : '${totalPowerKw.toStringAsFixed(1)}kW';
-    final lastSync = _panels.isEmpty
-        ? '—'
-        : _relativeTime(_panels.map((p) => p.lastSync).reduce((a, b) => a.isAfter(b) ? a : b));
+    // Real last-reading time, from the telemetry we actually recorded.
+    final lastSync = _series.isEmpty ? '—' : _relativeTime(_series.last.timestamp);
 
     return _card_(
       child: Column(
@@ -654,9 +648,7 @@ class _SolarGridScreenState extends ConsumerState<SolarGridScreen> {
     final activeDevices = _devices.where((d) => d.status == 'ACTIVE').length;
     final erroredDevices = _devices.where((d) => d.status == 'ERROR' || d.status == 'UNKNOWN').length;
     final generating = _devices.any((d) => d.activePowerKw > 0);
-    final lastSync = _panels.isEmpty
-        ? null
-        : _panels.map((p) => p.lastSync).reduce((a, b) => a.isAfter(b) ? a : b);
+    final lastSync = _series.isEmpty ? null : _series.last.timestamp;
 
     // Grid health from real device errors; night idle is not a fault
     final String health;

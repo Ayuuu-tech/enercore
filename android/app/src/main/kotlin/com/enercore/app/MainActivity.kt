@@ -1,4 +1,4 @@
-package com.example.enercore_app
+package com.enercore.app
 
 import io.flutter.embedding.android.FlutterActivity
 

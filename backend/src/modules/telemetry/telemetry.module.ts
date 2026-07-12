@@ -7,6 +7,7 @@ import { TracksoSyncService } from './application/trackso-sync.service';
 import { TracksoReportService } from './application/trackso-report.service';
 import { IoNextService } from './application/ionext.service';
 import { IoNextSyncService } from './application/ionext-sync.service';
+import { DeviceEnergyRecorder } from './application/device-energy.recorder';
 
 @Module({
   imports: [PrismaModule],
@@ -17,6 +18,7 @@ import { IoNextSyncService } from './application/ionext-sync.service';
     TracksoReportService,
     IoNextService,
     IoNextSyncService,
+    DeviceEnergyRecorder,
     {
       provide: 'ITelemetryRepository',
       useClass: PrismaTelemetryRepository,

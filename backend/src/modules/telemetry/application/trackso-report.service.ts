@@ -110,6 +110,7 @@ export class TracksoReportService {
       capacity: number | null;
       activePowerKw: number;
       dailyEnergyKwh: number;
+      totalEnergyKwh: number; // cumulative counter, for billing
       acVoltage: number; // avg of the 3 phases (V)
       acCurrent: number; // sum of the 3 phases (A)
       acFrequency: number; // Hz
@@ -176,6 +177,7 @@ export class TracksoReportService {
     const params = [
       'Output Active Power',
       'Daily Energy',
+      'Total Energy',
       'AC Voltage Phase AN',
       'AC Voltage Phase BN',
       'AC Voltage Phase CN',
@@ -191,7 +193,7 @@ export class TracksoReportService {
 
     const liveByUnit: Record<
       string,
-      { power: number; energy: number; voltage: number; current: number; frequency: number }
+      { power: number; energy: number; total: number; voltage: number; current: number; frequency: number }
     > = {};
     if (Object.keys(unitParameterList).length > 0) {
       const dataRes = await fetch(`${this.baseUrl}/dataquery/unit/latest_data`, {
@@ -223,6 +225,8 @@ export class TracksoReportService {
           liveByUnit[g.unit_key] = {
             power: find('Output Active Power'),
             energy: find('Daily Energy'),
+            // Trackso reports the unit counter in MWh.
+            total: find('Total Energy') * 1000,
             voltage: avgV,
             current: sumA,
             frequency: find('AC Frequency'),
@@ -239,6 +243,7 @@ export class TracksoReportService {
       capacity: u.capacity ?? u.ac_capacity ?? u.dc_capacity ?? null,
       activePowerKw: parseFloat((liveByUnit[u.unit_key]?.power ?? 0).toFixed(2)),
       dailyEnergyKwh: parseFloat((liveByUnit[u.unit_key]?.energy ?? 0).toFixed(1)),
+      totalEnergyKwh: parseFloat((liveByUnit[u.unit_key]?.total ?? 0).toFixed(1)),
       acVoltage: parseFloat((liveByUnit[u.unit_key]?.voltage ?? 0).toFixed(1)),
       acCurrent: parseFloat((liveByUnit[u.unit_key]?.current ?? 0).toFixed(1)),
       acFrequency: parseFloat((liveByUnit[u.unit_key]?.frequency ?? 0).toFixed(2)),

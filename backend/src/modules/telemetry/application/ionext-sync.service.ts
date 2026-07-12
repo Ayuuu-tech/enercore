@@ -3,6 +3,8 @@ import { PrismaService } from '../../../common/prisma/prisma.service';
 import { IoNextService, ProviderDevice } from './ionext.service';
 import { TracksoPlantMetrics } from './trackso-sync.service';
 import { istDay } from '../../../common/util/ist-day';
+import { withJobLock } from '../../../common/util/job-lock';
+import { DeviceEnergyRecorder } from './device-energy.recorder';
 
 /** Prefix that namespaces an IO.Next plant in the shared dashboard cache. */
 export const IONEXT_KEY_PREFIX = 'IN:';
@@ -27,6 +29,7 @@ export class IoNextSyncService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ioNext: IoNextService,
+    private readonly deviceEnergy: DeviceEnergyRecorder,
   ) {}
 
   onModuleInit() {
@@ -42,6 +45,10 @@ export class IoNextSyncService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async sync() {
+    await withJobLock(this.prisma, 'ionext-sync', () => this.doSync());
+  }
+
+  private async doSync() {
     const plants = await this.prisma.plant.findMany({
       where: { dataSource: 'IONEXT', externalKey: { not: null } },
     });
@@ -64,6 +71,8 @@ export class IoNextSyncService implements OnModuleInit, OnModuleDestroy {
           cuf: summary.cuf,
           status: summary.status,
         };
+        await this.deviceEnergy.record(plant.id, devices);
+
         // One telemetry row per inverter so the plant's power/voltage charts
         // build up over time. IO.Next reports at inverter level, so these rows
         // carry no panelId; series queries group by plantId.

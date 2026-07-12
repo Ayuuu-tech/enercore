@@ -204,6 +204,7 @@ model Plant {
   invoices     Invoice[]
   accessGrants PlantAccess[]
   dailyEnergy  DailyEnergy[]
+  deviceEnergy DeviceDailyEnergy[]
 }
 
 // One row per plant per calendar day (IST). Providers that don't expose
@@ -220,6 +221,38 @@ model DailyEnergy {
 
   @@unique([plantId, day])
   @@index([plantId, day])
+}
+
+// Same idea, per device (inverter/meter). Billing reads the cumulative counter
+// at the period edges to produce the bill's meter-readings table, exactly as a
+// physical meter is read.
+model DeviceDailyEnergy {
+  id          String   @id @default(uuid())
+  plantId     String
+  plant       Plant    @relation(fields: [plantId], references: [id], onDelete: Cascade)
+  deviceName  String
+  day         String // IST calendar day, "YYYY-MM-DD"
+  energyKwh   Float    @default(0) // that day's generation
+  lifetimeKwh Float    @default(0) // cumulative counter
+  updatedAt   DateTime @updatedAt
+
+  @@unique([plantId, deviceName, day])
+  @@index([plantId, day])
+}
+
+// Immutable snapshot of the meter readings a bill was raised on.
+model InvoiceMeterReading {
+  id           String  @id @default(uuid())
+  invoiceId    String
+  invoice      Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  meterName    String
+  startReading Float
+  endReading   Float
+  multiplier   Float   @default(1)
+  adjustment   Float   @default(0)
+  totalUnits   Float
+
+  @@index([invoiceId])
 }
 
 model Panel {
@@ -277,6 +310,8 @@ model Invoice {
   plant         Plant?        @relation(fields: [plantId], references: [id], onDelete: SetNull)
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
+
+  meterReadings InvoiceMeterReading[]
 
   // One bill per plant per month — makes generation safely re-runnable.
   @@unique([plantId, period])

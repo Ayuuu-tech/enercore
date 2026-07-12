@@ -1,9 +1,11 @@
 import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../common/prisma/prisma.service';
-import { PanelStatus } from '@prisma/client';
+import { TracksoReportService } from './trackso-report.service';
+import { DeviceEnergyRecorder } from './device-energy.recorder';
 import { allSiteKeys } from '../../../common/trackso/site-map';
 import { istDay } from '../../../common/util/ist-day';
+import { withJobLock } from '../../../common/util/job-lock';
 
 export interface TracksoPlantMetrics {
   siteName: string;
@@ -49,6 +51,8 @@ export class TracksoSyncService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly tracksoReport: TracksoReportService,
+    private readonly deviceEnergy: DeviceEnergyRecorder,
   ) {}
 
   private get baseUrl(): string {
@@ -88,6 +92,11 @@ export class TracksoSyncService implements OnModuleInit {
   }
 
   private async syncTracksoTelemetry() {
+    // Only one replica may write telemetry for a given tick.
+    await withJobLock(this.prisma, 'trackso-sync', () => this.doSync());
+  }
+
+  private async doSync() {
     this.logger.log('Starting Trackso telemetry synchronization...');
 
     try {
@@ -272,41 +281,28 @@ export class TracksoSyncService implements OnModuleInit {
             create: { plantId: targetPlant.id, day, energyKwh: dailyEnergy, lifetimeMwh: totalEnergy },
           });
 
-          const panels = await this.prisma.panel.findMany({
-            where: { plantId: targetPlant.id }
-          });
-
-          // Sync database panels
-          for (const panel of panels) {
-            const baseShare = (livePower * 1000) / panels.length;
-            const variation = 0.95 + Math.random() * 0.1;
-            const generation = Math.max(0, parseFloat((baseShare * variation).toFixed(2)));
-            const voltage = parseFloat((40 + Math.random() * 4).toFixed(1));
-            const current = voltage > 0 ? parseFloat((generation / voltage).toFixed(2)) : 0;
-            // Panel temp scales with output, capped to a realistic 25-60°C range
-            const temperature = parseFloat((25 + Math.min(generation / 1500, 1) * 30 + Math.random() * 3).toFixed(1));
-            
-            let status: PanelStatus = PanelStatus.HEALTHY;
-            if (generation === 0) {
-              status = PanelStatus.OFFLINE;
+          // One telemetry row per real inverter, straight from Trackso. These
+          // rows are what the voltage/current charts read, so they must never
+          // be synthesized — a monitoring product cannot invent readings.
+          try {
+            const devices = await this.tracksoReport.getDevices(targetPlant.id);
+            await this.deviceEnergy.record(targetPlant.id, devices);
+            const inverters = devices.filter((d) => d.type === 'INVERTER');
+            if (inverters.length > 0) {
+              const timestamp = new Date();
+              await this.prisma.telemetry.createMany({
+                data: inverters.map((d) => ({
+                  plantId: targetPlant.id,
+                  voltage: d.acVoltage,
+                  current: d.acCurrent,
+                  temperature: 0, // Trackso exposes no device temperature
+                  generation: d.activePowerKw * 1000, // kW → W
+                  timestamp,
+                })),
+              });
             }
-
-            await this.prisma.panel.update({
-              where: { id: panel.id },
-              data: { voltage, current, temperature, generation, status, lastSync: new Date() }
-            });
-
-            await this.prisma.telemetry.create({
-              data: {
-                voltage,
-                current,
-                temperature,
-                generation,
-                panelId: panel.id,
-                plantId: targetPlant.id,
-                timestamp: new Date()
-              }
-            });
+          } catch (err) {
+            this.logger.error(`Failed to record device telemetry for ${targetPlant.name}:`, err);
           }
 
           dbStatus = targetPlant.status;
