@@ -40,22 +40,50 @@ List<Marker> _markers(List<PlantSite> sites, {double size = 44}) {
   return sites
       .map((s) => Marker(
             point: s.position,
-            width: size,
-            height: size,
+            // Wide enough for the name; tall enough for the pin plus its label.
+            width: 132,
+            height: size + 22,
             alignment: Alignment.topCenter,
-            child: _PinMarker(active: s.active),
+            child: _PinMarker(name: s.name, active: s.active),
           ))
       .toList();
 }
 
 class _PinMarker extends StatelessWidget {
+  final String name;
   final bool active;
-  const _PinMarker({required this.active});
+  const _PinMarker({required this.name, required this.active});
 
   @override
   Widget build(BuildContext context) {
     final color = active ? _teal : const Color(0xFFEF4444);
-    return Icon(Icons.location_on, color: color, size: 40);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.location_on, color: color, size: 40),
+        // Site name, on a chip so it stays legible over the satellite imagery.
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.92),
+            borderRadius: BorderRadius.circular(5),
+            border: Border.all(color: color.withValues(alpha: 0.5), width: 0.8),
+          ),
+          child: Text(
+            name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: color,
+              fontSize: 9.5,
+              fontWeight: FontWeight.w800,
+              height: 1.1,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 

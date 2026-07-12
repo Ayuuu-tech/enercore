@@ -148,12 +148,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
-          Image.asset('assets/images/logo.png', height: 24, fit: BoxFit.contain),
-          const SizedBox(width: 8),
-          const Text(
-            'Enercore',
-            style: TextStyle(color: _teal, fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 0.3),
-          ),
+          Image.asset('assets/images/logo.png', height: 46, fit: BoxFit.contain),
           const Spacer(),
           GestureDetector(
             onTap: () => context.push('/notifications'),

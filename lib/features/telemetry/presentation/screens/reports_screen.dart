@@ -252,12 +252,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             child: const Icon(Icons.arrow_back_rounded, color: _slateDark, size: 22),
           ),
           const SizedBox(width: 12),
-          Image.asset('assets/images/logo.png', height: 24, fit: BoxFit.contain),
-          const SizedBox(width: 8),
-          const Text(
-            'Enercore',
-            style: TextStyle(color: _teal, fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 0.3),
-          ),
+          Image.asset('assets/images/logo.png', height: 46, fit: BoxFit.contain),
         ],
       ),
     );

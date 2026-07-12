@@ -37,17 +37,7 @@ class VendorTopBar extends StatelessWidget {
             ),
             const SizedBox(width: 12),
           ],
-          Image.asset('assets/images/logo.png', height: 24, fit: BoxFit.contain),
-          const SizedBox(width: 8),
-          const Text(
-            'Enercore',
-            style: TextStyle(
-              color: VendorTheme.teal,
-              fontSize: 16,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 0.3,
-            ),
-          ),
+          Image.asset('assets/images/logo.png', height: 46, fit: BoxFit.contain),
           const Spacer(),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),

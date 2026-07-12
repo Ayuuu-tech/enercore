@@ -169,7 +169,7 @@ class NotificationsScreen extends ConsumerWidget {
             child: const Icon(Icons.arrow_back_rounded, color: _slateDark, size: 22),
           ),
           const SizedBox(width: 12),
-          Image.asset('assets/images/logo.png', height: 24, fit: BoxFit.contain),
+          Image.asset('assets/images/logo.png', height: 46, fit: BoxFit.contain),
           const SizedBox(width: 8),
           const Text(
             'Notifications',

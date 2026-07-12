@@ -252,18 +252,8 @@ class _TicketsListScreenState extends ConsumerState<TicketsListScreen> {
           const SizedBox(width: 12),
           Image.asset(
             'assets/images/logo.png',
-            height: 24,
+            height: 46,
             fit: BoxFit.contain,
-          ),
-          const SizedBox(width: 8),
-          const Text(
-            'Enercore',
-            style: TextStyle(
-              color: _teal,
-              fontSize: 16,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 0.3,
-            ),
           ),
           const Spacer(),
           const UserAvatar(size: 32),
