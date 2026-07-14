@@ -55,3 +55,7 @@ backend/dist/
 # Flutter build output (also covered per-dir, kept here for safety)
 build/
 .dart_tool/
+
+# Captured API traffic — contains real auth tokens. Never commit.
+utils/sniffer/*_captured.json
+utils/sniffer/*.har
