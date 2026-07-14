@@ -54,6 +54,13 @@ android {
             } else {
                 signingConfigs.getByName("debug")
             }
+            // Strip unused code and resources from the shipped bundle.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 }

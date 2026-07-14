@@ -59,3 +59,22 @@ jobs:
       # Unsigned: release signing needs the keystore, which is not in the repo.
       - name: Build APK
         run: flutter build apk --debug
+
+  ios:
+    name: App (iOS)
+    # iOS can only be compiled on macOS, and nobody on the team has a Mac — so
+    # CI is the only thing keeping the iOS build honest. It compiles without
+    # signing; a signed .ipa needs an Apple Developer account and certificates.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Build iOS (no codesign)
+        run: flutter build ios --release --no-codesign
