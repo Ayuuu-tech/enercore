@@ -90,16 +90,18 @@ class _VendorKycScreenState extends ConsumerState<VendorKycScreen> {
     final picked = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png'],
-      withData: true, // needed on web, and lets us upload without a path
     );
     final file = picked?.files.singleOrNull;
-    if (file == null || file.bytes == null) return;
+    if (file == null) return;
 
     setState(() => _uploading = type);
     try {
+      // readAsBytes() works on every platform, including web (where a picked
+      // file has no path), and streams rather than holding the whole file.
+      final bytes = await file.readAsBytes();
       await ref.read(kycRepositoryProvider).uploadDocument(
             type: type,
-            bytes: file.bytes!,
+            bytes: bytes,
             fileName: file.name,
           );
       ref.invalidate(myKycProvider);
