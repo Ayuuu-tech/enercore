@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../vendor/domain/vendor_models.dart';
 import '../../data/marketplace_repository.dart';
+import '../../application/cart_controller.dart';
 
 class ProductDetailScreen extends ConsumerStatefulWidget {
   final String? productId;
@@ -333,9 +334,27 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                       elevation: 0,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    onPressed: () {},
+                    onPressed: product.stock <= 0
+                        ? null
+                        : () {
+                            // Respect the quantity the user picked above.
+                            ref.read(cartProvider.notifier).add(product, quantity: _quantity);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                backgroundColor: _teal,
+                                duration: const Duration(seconds: 2),
+                                content: Text('$_quantity × ${product.title} added to cart'),
+                                action: SnackBarAction(
+                                  textColor: Colors.white,
+                                  label: 'VIEW CART',
+                                  onPressed: () => context.push('/cart'),
+                                ),
+                              ),
+                            );
+                          },
                     icon: const Icon(Icons.shopping_cart_outlined, size: 16),
-                    label: const Text('ADD TO CART', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800)),
+                    label: Text(product.stock <= 0 ? 'OUT OF STOCK' : 'ADD TO CART',
+                        style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800)),
                   ),
                 ),
               ),

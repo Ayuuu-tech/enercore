@@ -15,6 +15,7 @@ import '../../features/telemetry/presentation/screens/reports_screen.dart';
 import '../../features/notifications/presentation/screens/notifications_screen.dart';
 import '../../features/marketplace/presentation/screens/marketplace_home_screen.dart';
 import '../../features/marketplace/presentation/screens/product_detail_screen.dart';
+import '../../features/marketplace/presentation/screens/cart_screen.dart';
 import '../../features/ticketing/presentation/screens/tickets_list_screen.dart';
 import '../../features/ticketing/presentation/screens/create_ticket_screen.dart';
 import '../../features/ticketing/presentation/screens/ticket_detail_screen.dart';
@@ -49,6 +50,7 @@ const _routeModule = <String, String>{
   '/ticket-detail': 'tickets',
   '/marketplace': 'marketplace',
   '/product-detail': 'marketplace',
+  '/cart': 'marketplace',
   '/notifications': 'notifications',
 };
 
@@ -177,6 +179,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     GoRoute(
       path: '/marketplace',
       builder: (context, state) => const MarketplaceHomeScreen(),
+    ),
+    GoRoute(
+      path: '/cart',
+      builder: (context, state) => const CartScreen(),
     ),
     GoRoute(
       path: '/product-detail',

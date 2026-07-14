@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../vendor/domain/vendor_models.dart';
 import '../../data/marketplace_repository.dart';
+import '../../application/cart_controller.dart';
 
 class MarketplaceHomeScreen extends ConsumerStatefulWidget {
   const MarketplaceHomeScreen({super.key});
@@ -143,7 +144,39 @@ class _MarketplaceHomeScreenState extends ConsumerState<MarketplaceHomeScreen> {
             fit: BoxFit.contain,
           ),
           const Spacer(),
+          _cartButton(),
+          const SizedBox(width: 14),
           const UserAvatar(size: 32),
+        ],
+      ),
+    );
+  }
+
+  /// Cart icon with a live count, so the cart isn't a place you have to guess at.
+  Widget _cartButton() {
+    final count = ref.watch(cartCountProvider);
+    return GestureDetector(
+      onTap: () => context.push('/cart'),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          const Icon(Icons.shopping_cart_outlined, color: _slateDark, size: 23),
+          if (count > 0)
+            Positioned(
+              right: -5,
+              top: -5,
+              child: Container(
+                padding: const EdgeInsets.all(3),
+                constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                decoration: const BoxDecoration(color: _teal, shape: BoxShape.circle),
+                child: Text(
+                  count > 99 ? '99+' : '$count',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -409,9 +442,26 @@ class _MarketplaceHomeScreenState extends ConsumerState<MarketplaceHomeScreen> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         foregroundColor: _teal,
                       ),
-                      onPressed: () {},
+                      onPressed: product.stock <= 0
+                          ? null
+                          : () {
+                              ref.read(cartProvider.notifier).add(product);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  backgroundColor: _teal,
+                                  duration: const Duration(seconds: 2),
+                                  content: Text('${product.title} added to cart'),
+                                  action: SnackBarAction(
+                                    textColor: Colors.white,
+                                    label: 'VIEW CART',
+                                    onPressed: () => context.push('/cart'),
+                                  ),
+                                ),
+                              );
+                            },
                       icon: const Icon(Icons.shopping_cart_outlined, size: 14),
-                      label: const Text('Add to Cart', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
+                      label: Text(product.stock <= 0 ? 'Out of Stock' : 'Add to Cart',
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
                     ),
                   ),
                 ],

@@ -44,14 +44,18 @@ class MarketplaceRepository {
   }
 
   /// Places a real order for the given product.
-  Future<void> createOrder(String productId, int quantity) async {
+  Future<void> createOrder(String productId, int quantity) =>
+      createOrderFromItems({productId: quantity});
+
+  /// Places a single order covering every line in the cart.
+  Future<void> createOrderFromItems(Map<String, int> quantityByProductId) async {
     final response = await httpPost(
       Uri.parse('${_authRepository.baseUrl}/orders'),
       headers: _headers,
       body: jsonEncode({
-        'items': [
-          {'productId': productId, 'quantity': quantity}
-        ]
+        'items': quantityByProductId.entries
+            .map((e) => {'productId': e.key, 'quantity': e.value})
+            .toList(),
       }),
     );
     if (response.statusCode != 200 && response.statusCode != 201) {
