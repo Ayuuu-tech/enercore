@@ -5,6 +5,7 @@ import '../../../auth/application/auth_controller.dart';
 import '../../application/vendor_controller.dart';
 import '../../domain/vendor_models.dart';
 import '../widgets/vendor_chrome.dart';
+import '../../data/kyc_repository.dart';
 
 class VendorDashboardScreen extends ConsumerWidget {
   const VendorDashboardScreen({super.key});
@@ -63,6 +64,7 @@ class VendorDashboardScreen extends ConsumerWidget {
                         ),
                       ),
                       const SizedBox(height: 20),
+                      const _KycBanner(),
                       statsAsync.when(
                         loading: () => const _StatsSkeleton(),
                         error: (e, _) => _errorBox('Failed to load stats: $e'),
@@ -310,6 +312,82 @@ class _StatsSkeleton extends StatelessWidget {
           child: const Center(child: CircularProgressIndicator(color: VendorTheme.teal, strokeWidth: 2)),
         ),
       ),
+    );
+  }
+}
+
+
+/// Surfaces KYC on the vendor's home screen: they can't be paid until Enercore
+/// has their PAN, GST, bank details and statutory documents, so a vendor who
+/// hasn't submitted needs to be told, not left to find the screen.
+class _KycBanner extends ConsumerWidget {
+  const _KycBanner();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(myKycProvider);
+    return async.maybeWhen(
+      orElse: () => const SizedBox.shrink(),
+      data: (kyc) {
+        // Nothing to nag about once they're verified.
+        if (kyc.status == 'APPROVED') return const SizedBox.shrink();
+
+        final (color, title, body) = switch (kyc.status) {
+          'PENDING' => (
+              const Color(0xFFD97706),
+              kyc.readyForReview ? 'KYC under review' : 'KYC incomplete',
+              kyc.readyForReview
+                  ? 'Enercore is reviewing your details.'
+                  : 'Add your remaining documents to finish.',
+            ),
+          'REJECTED' => (
+              const Color(0xFFEF4444),
+              'KYC needs attention',
+              kyc.rejectReason ?? 'Please review and resubmit.',
+            ),
+          _ => (
+              VendorTheme.teal,
+              'Complete your KYC',
+              'Add your PAN, GST, bank details and documents to get paid.',
+            ),
+        };
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 20),
+          child: GestureDetector(
+            onTap: () => context.push('/vendor-kyc'),
+            child: Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: color.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.verified_user_outlined, color: color, size: 22),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(title,
+                            style: TextStyle(
+                                color: color, fontSize: 13, fontWeight: FontWeight.w900)),
+                        const SizedBox(height: 2),
+                        Text(body,
+                            style: const TextStyle(
+                                color: VendorTheme.slateDark, fontSize: 11.5, height: 1.3)),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.chevron_right_rounded, color: color, size: 20),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

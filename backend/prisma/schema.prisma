@@ -162,15 +162,66 @@ model PlantAccess {
   @@index([plantId])
 }
 
+enum KycStatus {
+  NOT_SUBMITTED
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum VendorDocumentType {
+  PAN_CARD
+  GST_CERTIFICATE
+  CANCELLED_CHEQUE
+  MOA
+  AOA
+}
+
 model Vendor {
   id          String   @id
   user        User     @relation(fields: [id], references: [id], onDelete: Cascade)
   companyName String
   rating      Float    @default(0.0)
   isVerified  Boolean  @default(false)
+
+  // ── KYC. A vendor cannot be paid until Enercore has verified who they are
+  //    and where the money goes.
+  kycStatus       KycStatus @default(NOT_SUBMITTED)
+  kycSubmittedAt  DateTime?
+  kycReviewedAt   DateTime?
+  kycRejectReason String?
+
+  pan   String? // ABCDE1234F
+  gstin String? // 22ABCDE1234F1Z5
+
+  // Bank account the vendor is paid into.
+  bankAccountName   String? // name as it appears on the account
+  bankAccountNumber String?
+  bankIfsc          String?
+  bankName          String?
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   products    Product[]
+  documents   VendorDocument[]
+}
+
+/// A KYC document. The file itself lives in private blob storage — these rows
+/// hold only the key to it, never a public URL.
+model VendorDocument {
+  id         String             @id @default(uuid())
+  vendorId   String
+  vendor     Vendor             @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  type       VendorDocumentType
+  blobKey    String // path within the private container
+  fileName   String
+  mimeType   String
+  sizeBytes  Int
+  uploadedAt DateTime           @default(now())
+
+  // One current document of each type per vendor; re-uploading replaces it.
+  @@unique([vendorId, type])
+  @@index([vendorId])
 }
 
 enum PlantDataSource {

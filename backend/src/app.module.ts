@@ -7,6 +7,7 @@ import { AppService } from './app.service';
 
 // Import Feature Modules
 import { PrismaModule } from './common/prisma/prisma.module';
+import { StorageModule } from './common/storage/storage.module';
 import { PlantAccessModule } from './common/access/plant-access.module';
 import { AuditModule } from './common/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -27,6 +28,7 @@ import { AdminModule } from './modules/admin/admin.module';
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
+    StorageModule,
     PlantAccessModule,
     AuditModule,
     AuthModule,

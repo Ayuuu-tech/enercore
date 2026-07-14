@@ -32,6 +32,8 @@ import '../../features/vendor/presentation/screens/vendor_products_screen.dart';
 import '../../features/vendor/presentation/screens/vendor_add_product_screen.dart';
 import '../../features/vendor/presentation/screens/vendor_orders_screen.dart';
 import '../../features/vendor/presentation/screens/vendor_store_screen.dart';
+import '../../features/vendor/presentation/screens/vendor_kyc_screen.dart';
+import '../../features/admin/presentation/screens/admin_kyc_screen.dart';
 import '../../features/vendor/domain/vendor_models.dart';
 import '../../features/profile/presentation/screens/profile_settings_screen.dart';
 
@@ -163,6 +165,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     GoRoute(
       path: '/admin-audit',
       builder: (context, state) => const AdminAuditScreen(),
+    ),
+    GoRoute(
+      path: '/vendor-kyc',
+      builder: (context, state) => const VendorKycScreen(),
+    ),
+    GoRoute(
+      path: '/admin-kyc',
+      builder: (context, state) => const AdminKycScreen(),
     ),
     GoRoute(
       path: '/admin-tickets',
