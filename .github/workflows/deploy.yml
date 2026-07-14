@@ -1,0 +1,76 @@
+name: Deploy backend
+
+# Deploying from a laptop meant zipping node_modules and pushing ~130 MB to a
+# B1 App Service — 10–15 minutes, and it failed as often as it worked. GitHub's
+# runners build the artefact and push it from inside Azure's network instead.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/deploy.yml'
+  # Lets you redeploy the current main without pushing a commit.
+  workflow_dispatch:
+
+concurrency:
+  # Never let two deploys race each other onto the same App Service.
+  group: deploy-backend
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and deploy to Azure
+    runs-on: ubuntu-latest
+    environment: production
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      # Build with dev dependencies present…
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run build
+
+      # …then reduce to what production actually runs. Oryx times out compiling
+      # Nest on a B1, so we ship a prebuilt artefact and leave Azure's build off.
+      - name: Stage the production artefact
+        run: |
+          rm -rf ../artefact && mkdir -p ../artefact
+          cp package.json package-lock.json ../artefact/
+          cd ../artefact
+          npm ci --omit=dev --ignore-scripts
+          cd ../backend
+          cp -r dist prisma prisma.config.ts ../artefact/
+          # The Prisma client is generated code; carry it over rather than
+          # regenerating it on the App Service.
+          cp -r node_modules/.prisma node_modules/@prisma ../artefact/node_modules/
+          cd ../artefact
+          npm pkg delete scripts.postinstall
+
+      - name: Deploy
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: enercore-api-11148
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: artefact
+
+      - name: Wait for the API to come back
+        run: |
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 \
+              https://enercore-api-11148.azurewebsites.net/api || true)
+            echo "attempt $i: HTTP $code"
+            [ "$code" = "200" ] && exit 0
+            sleep 15
+          done
+          echo "API did not come back healthy after the deploy"
+          exit 1

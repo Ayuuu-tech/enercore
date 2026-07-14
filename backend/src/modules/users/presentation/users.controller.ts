@@ -13,7 +13,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
+import { memoryStorage } from 'multer';
 import { extname, join } from 'path';
 import { v4 as uuid } from 'uuid';
 import { UsersService } from '../application/users.service';
@@ -24,11 +24,15 @@ import { Roles } from '../../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { UserEntity } from '../domain/user.entity';
 import { Role } from '@prisma/client';
+import { BlobStorageService } from '../../../common/storage/blob-storage.service';
 
 @Controller('users')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly storage: BlobStorageService,
+  ) {}
 
   @Get('me')
   async getProfile(@CurrentUser() user: UserEntity) {
@@ -74,14 +78,9 @@ export class UsersController {
   @Post(':id/avatar')
   @UseInterceptors(
     FileInterceptor('avatar', {
-      storage: diskStorage({
-        destination: join(__dirname, '..', '..', '..', '..', '..', 'uploads', 'avatars'),
-        filename: (_req: Express.Request, file: Express.Multer.File, cb: (error: Error | null, filename: string) => void) => {
-          const name = uuid();
-          const ext = extname(file.originalname);
-          cb(null, `${name}${ext}`);
-        },
-      }),
+      // Held in memory, then written to blob storage. The App Service disk is
+      // wiped by every redeploy, which used to take users' photos with it.
+      storage: memoryStorage(),
       fileFilter: (_req: Express.Request, file: Express.Multer.File, cb: (error: Error | null, acceptFile: boolean) => void) => {
         if (!file.mimetype.match(/^image\//)) {
           cb(new BadRequestException('Only image files are allowed'), false);
@@ -103,7 +102,12 @@ export class UsersController {
     if (!file) {
       throw new BadRequestException('Avatar file is required');
     }
-    const avatarUrl = `/uploads/avatars/${file.filename}`;
+    const ext = extname(file.originalname) || '.jpg';
+    const avatarUrl = await this.storage.uploadPublic(
+      `${id}/${uuid()}${ext}`,
+      file.buffer,
+      file.mimetype,
+    );
     const user = await this.usersService.update(id, { avatarUrl });
     delete user.password;
     return user;

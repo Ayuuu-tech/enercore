@@ -95,4 +95,29 @@ export class BlobStorageService {
   async delete(key: string): Promise<void> {
     await this.client().getBlockBlobClient(key).deleteIfExists();
   }
+
+  /**
+   * Uploads to the public `avatars` container and returns a durable URL.
+   *
+   * Profile photos are not KYC documents: they were already served publicly
+   * from /uploads, and the app loads them with a plain Image.network (no auth
+   * header), so a signed link would expire out from under it. What matters is
+   * that they survive a redeploy — the App Service disk does not.
+   */
+  async uploadPublic(key: string, buffer: Buffer, mimeType: string): Promise<string> {
+    const cs = this.connectionString;
+    if (!cs) {
+      throw new ServiceUnavailableException(
+        'Object storage is not configured (AZURE_STORAGE_CONNECTION_STRING)',
+      );
+    }
+    const service = BlobServiceClient.fromConnectionString(cs);
+    const containerName = this.config.get<string>('AZURE_AVATAR_CONTAINER') ?? 'avatars';
+    const container = service.getContainerClient(containerName);
+
+    const blob = container.getBlockBlobClient(key);
+    await blob.uploadData(buffer, { blobHTTPHeaders: { blobContentType: mimeType } });
+    this.logger.log(`Stored public ${containerName}/${key}`);
+    return blob.url;
+  }
 }
