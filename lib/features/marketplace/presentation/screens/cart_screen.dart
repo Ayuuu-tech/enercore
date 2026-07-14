@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../application/cart_controller.dart';
 import '../../data/marketplace_repository.dart';
+import '../../domain/pricing.dart';
 
 class CartScreen extends ConsumerStatefulWidget {
   const CartScreen({super.key});
@@ -51,7 +52,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
   @override
   Widget build(BuildContext context) {
     final lines = ref.watch(cartProvider);
-    final total = ref.watch(cartTotalProvider);
+    final price = ref.watch(cartPriceProvider);
 
     return Scaffold(
       backgroundColor: _bg,
@@ -115,7 +116,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                       itemBuilder: (context, i) => _line(lines[i]),
                     ),
             ),
-            if (lines.isNotEmpty) _checkoutBar(total),
+            if (lines.isNotEmpty) _checkoutBar(price),
           ],
         ),
       ),
@@ -146,7 +147,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                 const SizedBox(height: 2),
                 Text(p.brand, style: const TextStyle(color: _slateLight, fontSize: 11)),
                 const SizedBox(height: 8),
-                Text('₹${p.price.toStringAsFixed(0)}  ×  ${l.quantity}',
+                Text('₹${displayPrice(p.price).toStringAsFixed(0)}  ×  ${l.quantity}',
                     style: const TextStyle(color: _slateLight, fontSize: 11.5)),
                 const SizedBox(height: 2),
                 Text('₹${l.lineTotal.toStringAsFixed(0)}',
@@ -201,6 +202,18 @@ class _CartScreenState extends ConsumerState<CartScreen> {
     );
   }
 
+  Widget _priceRow(String label, num amount) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label,
+            style: const TextStyle(color: _slateLight, fontSize: 12, fontWeight: FontWeight.w600)),
+        Text('₹${amount.toStringAsFixed(2)}',
+            style: const TextStyle(color: _slateDark, fontSize: 12.5, fontWeight: FontWeight.w700)),
+      ],
+    );
+  }
+
   Widget _qtyButton(IconData icon, VoidCallback? onTap) {
     return InkWell(
       onTap: onTap,
@@ -211,7 +224,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
     );
   }
 
-  Widget _checkoutBar(num total) {
+  Widget _checkoutBar(PriceBreakdown price) {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       decoration: const BoxDecoration(
@@ -220,12 +233,21 @@ class _CartScreenState extends ConsumerState<CartScreen> {
       ),
       child: Column(
         children: [
+          // The commission is already inside these prices and is deliberately
+          // not itemised — neither the customer nor the vendor sees it.
+          _priceRow('Subtotal', price.taxable),
+          const SizedBox(height: 4),
+          _priceRow('GST (18%)', price.gst),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: Divider(height: 1, color: _cardBorder),
+          ),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text('Total',
-                  style: TextStyle(color: _slateLight, fontSize: 13, fontWeight: FontWeight.w600)),
-              Text('₹${total.toStringAsFixed(0)}',
+                  style: TextStyle(color: _slateDark, fontSize: 13, fontWeight: FontWeight.w800)),
+              Text('₹${price.total.toStringAsFixed(2)}',
                   style: const TextStyle(
                       color: _slateDark, fontSize: 20, fontWeight: FontWeight.w900)),
             ],

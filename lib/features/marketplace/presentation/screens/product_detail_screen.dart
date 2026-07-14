@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../vendor/domain/vendor_models.dart';
 import '../../data/marketplace_repository.dart';
 import '../../application/cart_controller.dart';
+import '../../domain/pricing.dart';
 
 class ProductDetailScreen extends ConsumerStatefulWidget {
   final String? productId;
@@ -221,13 +222,13 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                 textBaseline: TextBaseline.alphabetic,
                 children: [
                   Text(
-                    formatInr(product.price),
+                    formatInr(displayPrice(product.price)),
                     style: const TextStyle(color: _slateDark, fontSize: 24, fontWeight: FontWeight.w900),
                   ),
                   if (product.originalPrice != null) ...[
                     const SizedBox(width: 6),
                     Text(
-                      formatInr(product.originalPrice!),
+                      formatInr(displayPrice(product.originalPrice!)),
                       style: const TextStyle(
                           color: _slateLight,
                           fontSize: 12,
@@ -235,6 +236,13 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                           decoration: TextDecoration.lineThrough),
                     ),
                   ],
+                  const SizedBox(width: 8),
+                  // The commission is already inside this price; only GST is
+                  // named, because a tax must be.
+                  const Text(
+                    'incl. GST',
+                    style: TextStyle(color: _slateLight, fontSize: 10.5, fontWeight: FontWeight.w600),
+                  ),
                 ],
               ),
               Container(
@@ -532,7 +540,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
               for (final p in related.take(5)) ...[
                 GestureDetector(
                   onTap: () => context.push('/product-detail', extra: p.id),
-                  child: _recomCard(p.title, formatInr(p.price), productImageFor(p)),
+                  child: _recomCard(p.title, formatInr(displayPrice(p.price)), productImageFor(p)),
                 ),
                 const SizedBox(width: 12),
               ],

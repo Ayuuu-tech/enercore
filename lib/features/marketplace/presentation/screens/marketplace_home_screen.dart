@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../vendor/domain/vendor_models.dart';
 import '../../data/marketplace_repository.dart';
 import '../../application/cart_controller.dart';
+import '../../domain/pricing.dart';
 
 class MarketplaceHomeScreen extends ConsumerStatefulWidget {
   const MarketplaceHomeScreen({super.key});
@@ -297,7 +298,8 @@ class _MarketplaceHomeScreenState extends ConsumerState<MarketplaceHomeScreen> {
     final spec = product.spec;
     final rating = product.rating.toStringAsFixed(1);
     final reviewsCount = product.reviewsCount.toString();
-    final price = formatInr(product.price);
+    // Show the all-inclusive price, so it doesn't change on them at checkout.
+    final price = formatInr(displayPrice(product.price));
     final originalPrice = product.originalPrice != null ? formatInr(product.originalPrice!) : null;
     final isAssured = product.isAssured;
     return GestureDetector(

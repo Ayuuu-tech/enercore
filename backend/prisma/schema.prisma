@@ -339,7 +339,13 @@ model Product {
 model Order {
   id          String      @id @default(uuid())
   orderNumber String      @unique
-  totalAmount Float
+  // Price breakdown, so a GST invoice can be raised from the order alone.
+  // subtotal is what the vendors listed (and are paid); platformFee is
+  // Enercore's commission; GST is charged on subtotal + platformFee.
+  subtotal    Float       @default(0)
+  platformFee Float       @default(0)
+  gstAmount   Float       @default(0)
+  totalAmount Float // what the customer pays
   status      OrderStatus @default(PENDING)
   userId      String
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)

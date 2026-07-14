@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../vendor/domain/vendor_models.dart';
+import '../domain/pricing.dart';
 
 /// A product in the cart, with the quantity the user picked.
 class CartLine {
@@ -8,7 +9,11 @@ class CartLine {
 
   const CartLine({required this.product, required this.quantity});
 
-  num get lineTotal => product.price * quantity;
+  /// What the vendor is paid for this line.
+  num get lineSubtotal => product.price * quantity;
+
+  /// What the customer pays for this line — commission and GST included.
+  num get lineTotal => priceBreakdown(lineSubtotal).total;
 
   CartLine copyWith({int? quantity}) =>
       CartLine(product: product, quantity: quantity ?? this.quantity);
@@ -65,6 +70,13 @@ final cartCountProvider = Provider<int>((ref) {
   return ref.watch(cartProvider).fold<int>(0, (s, l) => s + l.quantity);
 });
 
-final cartTotalProvider = Provider<num>((ref) {
-  return ref.watch(cartProvider).fold<num>(0, (s, l) => s + l.lineTotal);
+/// Full breakdown for the cart. Computed on the summed vendor subtotal, exactly
+/// as the backend does — summing per-line totals could differ by rounding.
+final cartPriceProvider = Provider<PriceBreakdown>((ref) {
+  final subtotal =
+      ref.watch(cartProvider).fold<num>(0, (s, l) => s + l.lineSubtotal);
+  return priceBreakdown(subtotal);
 });
+
+/// What the customer pays for the whole cart.
+final cartTotalProvider = Provider<num>((ref) => ref.watch(cartPriceProvider).total);

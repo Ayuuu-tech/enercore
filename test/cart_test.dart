@@ -43,11 +43,17 @@ void main() {
     expect(c.read(cartCountProvider), 2);
   });
 
-  test('totals the lines', () {
+  test('totals the lines, and the total is what the customer actually pays', () {
     cart().add(product(id: 'a', price: 100), quantity: 2);
     cart().add(product(id: 'b', price: 250));
 
-    expect(c.read(cartTotalProvider), 450); // 2×100 + 250
+    final price = c.read(cartPriceProvider);
+    // The customer is shown `taxable` as the subtotal — the commission is
+    // folded into it and never itemised.
+    expect(price.taxable, 452.25); // 450 + hidden 0.5%
+    expect(price.gst, 81.41); // 18% of 452.25
+    expect(c.read(cartTotalProvider), 533.66);
+
     expect(c.read(cartCountProvider), 3);
   });
 

@@ -3,6 +3,7 @@ import { PrismaService } from '../../../common/prisma/prisma.service';
 import { IOrderRepository } from '../domain/order.repository.interface';
 import { OrderEntity, OrderItemEntity } from '../domain/order.entity';
 import { Order as PrismaOrder, OrderItem as PrismaOrderItem, OrderStatus } from '@prisma/client';
+import { priceBreakdown } from '../../../common/util/pricing';
 
 @Injectable()
 export class PrismaOrderRepository implements IOrderRepository {
@@ -12,6 +13,7 @@ export class PrismaOrderRepository implements IOrderRepository {
     return new OrderEntity({
       id: o.id,
       orderNumber: o.orderNumber,
+      gstAmount: o.gstAmount,
       totalAmount: o.totalAmount,
       status: o.status,
       userId: o.userId,
@@ -69,7 +71,9 @@ export class PrismaOrderRepository implements IOrderRepository {
     const orderNumber = `ORD-${uniqueSuffix}`;
 
     const order = await this.prisma.$transaction(async (tx) => {
-      let totalAmount = 0;
+      // Sum of what the vendors listed. Enercore's commission and GST are
+      // applied on top, once, below.
+      let subtotal = 0;
       const orderItemsToCreate: { productId: string; quantity: number; priceAtPurchase: number }[] = [];
 
       for (const item of items) {
@@ -94,7 +98,7 @@ export class PrismaOrderRepository implements IOrderRepository {
         });
 
         const priceAtPurchase = product.price;
-        totalAmount += priceAtPurchase * item.quantity;
+        subtotal += priceAtPurchase * item.quantity;
 
         orderItemsToCreate.push({
           productId: item.productId,
@@ -103,11 +107,17 @@ export class PrismaOrderRepository implements IOrderRepository {
         });
       }
 
+      // The customer is charged exactly what the app quoted them.
+      const price = priceBreakdown(subtotal);
+
       // Create Order
       const newOrder = await tx.order.create({
         data: {
           orderNumber,
-          totalAmount,
+          subtotal: price.subtotal,
+          platformFee: price.platformFee,
+          gstAmount: price.gst,
+          totalAmount: price.total,
           userId,
           status: OrderStatus.PENDING,
           items: {
