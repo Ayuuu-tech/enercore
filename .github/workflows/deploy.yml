@@ -56,21 +56,53 @@ jobs:
           cd ../artefact
           npm pkg delete scripts.postinstall
 
-      - name: Deploy
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: enercore-api-11148
-          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-          package: artefact
+      - name: Zip the artefact
+        working-directory: artefact
+        run: zip -qr ../deploy.zip .
 
-      - name: Wait for the API to come back
+      # azure/webapps-deploy zips ~120 MB and pushes it synchronously; on a B1
+      # the SCM side is slow enough that the action times out (the same reason
+      # manual `az webapp deploy` had to run --async). So we drive Kudu directly:
+      # an async zipdeploy, then poll for the real terminal status.
+      - name: Deploy to Azure (async zipdeploy) and verify
+        working-directory: .
+        env:
+          PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
         run: |
-          for i in $(seq 1 30); do
+          set -euo pipefail
+          APP=enercore-api-11148
+          SCM="https://$APP.scm.azurewebsites.net"
+
+          # Pull the MSDeploy credentials out of the publish profile.
+          user=$(printf '%s' "$PUBLISH_PROFILE" | grep -o 'userName="[^"]*"' | head -1 | sed 's/userName="\(.*\)"/\1/')
+          pass=$(printf '%s' "$PUBLISH_PROFILE" | grep -o 'userPWD="[^"]*"'  | head -1 | sed 's/userPWD="\(.*\)"/\1/')
+          if [ -z "$user" ] || [ -z "$pass" ]; then
+            echo "Could not read credentials from AZURE_WEBAPP_PUBLISH_PROFILE"; exit 1
+          fi
+
+          echo "Uploading package…"
+          code=$(curl -s -o /dev/null -w '%{http_code}' -u "$user:$pass" \
+            --max-time 600 -X POST "$SCM/api/zipdeploy?isAsync=true" \
+            -H 'Content-Type: application/zip' --data-binary @deploy.zip)
+          echo "zipdeploy accepted: HTTP $code"
+          [ "$code" = "202" ] || [ "$code" = "200" ] || { echo "upload rejected"; exit 1; }
+
+          echo "Waiting for the deployment to finish…"
+          for i in $(seq 1 40); do
+            status=$(curl -s -u "$user:$pass" --max-time 30 "$SCM/api/deployments/latest" \
+              | python3 -c "import sys,json;print(json.load(sys.stdin).get('status','?'))" 2>/dev/null || echo '?')
+            echo "  poll $i: status=$status"   # 4 = success, 3 = failed
+            [ "$status" = "4" ] && break
+            [ "$status" = "3" ] && { echo "deployment failed on Azure"; exit 1; }
+            sleep 15
+          done
+
+          echo "Waiting for the API to come back healthy…"
+          for i in $(seq 1 40); do
             code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 \
-              https://enercore-api-11148.azurewebsites.net/api || true)
-            echo "attempt $i: HTTP $code"
+              "https://$APP.azurewebsites.net/api" || true)
+            echo "  health $i: HTTP $code"
             [ "$code" = "200" ] && exit 0
             sleep 15
           done
-          echo "API did not come back healthy after the deploy"
-          exit 1
+          echo "API did not return healthy after the deploy"; exit 1
