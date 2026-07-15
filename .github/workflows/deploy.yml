@@ -60,24 +60,27 @@ jobs:
         working-directory: artefact
         run: zip -qr ../deploy.zip .
 
-      # azure/webapps-deploy zips ~120 MB and pushes it synchronously; on a B1
+# azure/webapps-deploy zips ~120 MB and pushes it synchronously; on a B1
       # the SCM side is slow enough that the action times out (the same reason
       # manual `az webapp deploy` had to run --async). So we drive Kudu directly:
       # an async zipdeploy, then poll for the real terminal status.
+      #
+      # The credential is the SCM (deployment) password as a single-line secret,
+      # not the whole publish-profile XML — a multi-line secret is too easy to
+      # paste wrong, and there's nothing to diagnose when it is. The username is
+      # fixed ("$<app-name>") and not sensitive.
       - name: Deploy to Azure (async zipdeploy) and verify
         working-directory: .
         env:
-          PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          SCM_PASSWORD: ${{ secrets.AZURE_SCM_PASSWORD }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
           APP=enercore-api-11148
           SCM="https://$APP.scm.azurewebsites.net"
-
-          # Pull the MSDeploy credentials out of the publish profile.
-          user=$(printf '%s' "$PUBLISH_PROFILE" | grep -o 'userName="[^"]*"' | head -1 | sed 's/userName="\(.*\)"/\1/')
-          pass=$(printf '%s' "$PUBLISH_PROFILE" | grep -o 'userPWD="[^"]*"'  | head -1 | sed 's/userPWD="\(.*\)"/\1/')
-          if [ -z "$user" ] || [ -z "$pass" ]; then
-            echo "Could not read credentials from AZURE_WEBAPP_PUBLISH_PROFILE"; exit 1
+          user="\$$APP"
+          pass="$SCM_PASSWORD"
+          if [ -z "$pass" ]; then
+            echo "AZURE_SCM_PASSWORD secret is empty"; exit 1
           fi
 
           echo "Uploading package…"
