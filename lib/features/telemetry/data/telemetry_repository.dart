@@ -20,6 +20,11 @@ final periodYieldProvider = FutureProvider<PeriodYield>((ref) async {
   return ref.read(telemetryRepositoryProvider).getPeriodYields();
 });
 
+/// Open alarms and per-site alarm counts across the user's plants.
+final alarmsProvider = FutureProvider<AlarmReport>((ref) async {
+  return ref.read(telemetryRepositoryProvider).getAlarms();
+});
+
 /// Today's generation curve summed across all of the user's plants (24h window).
 final combinedGenerationSeriesProvider = FutureProvider<List<TelemetrySeriesPoint>>((ref) async {
   final plants = await ref.read(plantsRepositoryProvider).getPlants();
@@ -101,6 +106,22 @@ class TelemetryRepository {
     } else {
       throw Exception('Failed to fetch devices: ${response.statusCode}');
     }
+  }
+
+  /// Open alarms and the per-site alarm-count summary.
+  Future<AlarmReport> getAlarms() async {
+    final token = _authRepository.token;
+    final response = await httpGet(
+      Uri.parse('${_authRepository.baseUrl}/telemetry/alarms'),
+      headers: {
+        'Content-Type': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      },
+    );
+    if (response.statusCode == 200) {
+      return AlarmReport.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    }
+    throw Exception('Failed to fetch alarms: ${response.statusCode}');
   }
 
   /// Per-device daily generation over the last [days] days — the "generation
@@ -364,6 +385,67 @@ class DeviceDayGeneration {
   const DeviceDayGeneration({required this.day, required this.values});
 
   double get total => values.fold(0, (s, v) => s + v);
+}
+
+/// A site's open-alarm counts, by category.
+class SiteAlarmCount {
+  final String siteName;
+  final int inverterAlarms;
+  final int inverterNoData;
+  final int communication;
+  final int ruleAlerts;
+
+  const SiteAlarmCount({
+    required this.siteName,
+    required this.inverterAlarms,
+    required this.inverterNoData,
+    required this.communication,
+    required this.ruleAlerts,
+  });
+
+  int get total => inverterAlarms + inverterNoData + communication + ruleAlerts;
+
+  factory SiteAlarmCount.fromJson(Map<String, dynamic> j) => SiteAlarmCount(
+        siteName: j['siteName'] as String? ?? 'Site',
+        inverterAlarms: (j['openInverterAlarmCount'] as num?)?.toInt() ?? 0,
+        inverterNoData: (j['noDataInverterAlarmCount'] as num?)?.toInt() ?? 0,
+        communication: (j['openCommunicationLogsCount'] as num?)?.toInt() ?? 0,
+        ruleAlerts: (j['openRuleEvaluationLogsCount'] as num?)?.toInt() ?? 0,
+      );
+}
+
+/// One open alarm record.
+class AlarmRecord {
+  final String name;
+  final String location;
+  final String time;
+
+  const AlarmRecord({required this.name, required this.location, required this.time});
+
+  factory AlarmRecord.fromJson(Map<String, dynamic> j) => AlarmRecord(
+        name: (j['alarmName'] ?? j['name'] ?? j['title'] ?? 'Alarm').toString(),
+        location: (j['siteName'] ?? j['deviceName'] ?? j['unitName'] ?? '').toString(),
+        time: (j['createdAt'] ?? j['time'] ?? j['from'] ?? '').toString(),
+      );
+}
+
+/// Open alarms plus the per-site count summary.
+class AlarmReport {
+  final List<SiteAlarmCount> counts;
+  final List<AlarmRecord> alarms;
+
+  const AlarmReport({required this.counts, required this.alarms});
+
+  int get totalOpen => counts.fold(0, (s, c) => s + c.total);
+
+  factory AlarmReport.fromJson(Map<String, dynamic> j) => AlarmReport(
+        counts: (j['counts'] as List<dynamic>? ?? [])
+            .map((c) => SiteAlarmCount.fromJson(c as Map<String, dynamic>))
+            .toList(),
+        alarms: (j['alarms'] as List<dynamic>? ?? [])
+            .map((a) => AlarmRecord.fromJson(a as Map<String, dynamic>))
+            .toList(),
+      );
 }
 
 /// Per-device daily generation for a plant — powers the inverter bar chart.

@@ -9,6 +9,7 @@ import '../../features/auth/presentation/screens/auth/forgot_password_screen.dar
 import '../../features/auth/presentation/screens/onboarding/onboarding_screen.dart';
 import '../../features/dashboard/presentation/screens/client_dashboard_screen.dart';
 import '../../features/dashboard/presentation/screens/alerts_screen.dart';
+import '../../features/telemetry/presentation/screens/alarms_screen.dart';
 import '../../features/telemetry/presentation/screens/solar_grid_screen.dart';
 import '../../features/telemetry/presentation/screens/telemetry_dashboard_screen.dart';
 import '../../features/telemetry/presentation/screens/reports_screen.dart';
@@ -45,6 +46,7 @@ final _authRoutes = <String>{
 const _routeModule = <String, String>{
   '/solar-grid': 'plants',
   '/telemetry': 'telemetry',
+  '/alarms': 'telemetry',
   '/reports': 'reports',
   '/billing': 'billing',
   '/tickets': 'tickets',
@@ -181,6 +183,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     GoRoute(
       path: '/alerts',
       builder: (context, state) => const AlertsScreen(),
+    ),
+    GoRoute(
+      path: '/alarms',
+      builder: (context, state) => const AlarmsScreen(),
     ),
     GoRoute(
       path: '/admin-features',
