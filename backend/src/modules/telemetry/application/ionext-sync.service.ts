@@ -60,17 +60,38 @@ export class IoNextSyncService implements OnModuleInit, OnModuleDestroy {
           this.ioNext.getSummary(key),
         ]);
         this.devicesByPlantId[plant.id] = devices;
+
+        // When the reading is stale, live power is 0 and status Inactive, but
+        // the plant did generate earlier today — show that from our last saved
+        // snapshot rather than 0, so "today" doesn't collapse when the logger
+        // blinks offline.
+        let dashDaily = summary.dailyEnergy;
+        let dashTotal = summary.totalEnergy;
+        if (!summary.fresh) {
+          const today = await this.prisma.dailyEnergy.findUnique({
+            where: { plantId_day: { plantId: plant.id, day: istDay(Date.now()) } },
+            select: { energyKwh: true, lifetimeMwh: true },
+          });
+          dashDaily = today?.energyKwh ?? 0;
+          dashTotal = today?.lifetimeMwh ?? summary.totalEnergy;
+        }
         this.dashboardPlants[ionextDashboardKey(key)] = {
           siteName: plant.name,
           livePower: summary.livePower,
-          dailyEnergy: summary.dailyEnergy,
-          totalEnergy: summary.totalEnergy,
+          dailyEnergy: dashDaily,
+          totalEnergy: dashTotal,
           specificYield: plant.peakCapacity > 0
-            ? parseFloat((summary.dailyEnergy / plant.peakCapacity).toFixed(2))
+            ? parseFloat((dashDaily / plant.peakCapacity).toFixed(2))
             : 0,
           cuf: summary.cuf,
           status: summary.status,
         };
+        // A stale reading (datalogger offline) must not be persisted: writing
+        // it would draw a flat line of old values on the charts and, worse,
+        // overwrite today's real energy snapshot that billing reads. Keep the
+        // last-known-good rows instead and wait for the logger to come back.
+        if (!summary.fresh) continue;
+
         await this.deviceEnergy.record(plant.id, devices);
 
         // One telemetry row per inverter so the plant's power/voltage charts

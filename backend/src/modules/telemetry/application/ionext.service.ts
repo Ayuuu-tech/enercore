@@ -28,6 +28,8 @@ export interface ProviderSummary {
   totalEnergy: number; // MWh
   cuf: number; // %
   status: string;
+  /** Whether the reading is current (datalogger online and recently stamped). */
+  fresh: boolean;
 }
 
 /**
@@ -85,9 +87,30 @@ export class IoNextService {
     return res.json();
   }
 
+  /**
+   * Age of the freshest reading in a device set, in minutes, or Infinity if no
+   * reading carries a timestamp. Records are stamped "DD/MM/YY" + "HH:MM:SS" in
+   * IST; when the datalogger goes offline the proxy keeps returning the last
+   * file it saw, so this is how we tell "live" from "days old".
+   */
+  private readingAgeMinutes(devices: Record<string, Record<string, string>>): number {
+    let newest = 0;
+    for (const v of Object.values(devices)) {
+      const dm = /^(\d{2})\/(\d{2})\/(\d{2})$/.exec(String(v.Date ?? ''));
+      const tm = /^(\d{2}):(\d{2}):(\d{2})$/.exec(String(v.Time ?? ''));
+      if (!dm || !tm) continue;
+      const [, dd, mm, yy] = dm;
+      const [, hh, mi, ss] = tm;
+      // Interpret as IST, convert to a UTC instant.
+      const utc = Date.UTC(2000 + +yy, +mm - 1, +dd, +hh, +mi, +ss) - IST_OFFSET_MS;
+      if (utc > newest) newest = utc;
+    }
+    return newest === 0 ? Infinity : (Date.now() - newest) / 60000;
+  }
+
   /** Raw live readings for every device on a plant, keyed by device name. */
   private async fetchLiveData(plantPk: string): Promise<{
-    online: boolean;
+    fresh: boolean;
     devices: Record<string, Record<string, string>>;
   }> {
     const { companyPk } = await this.login();
@@ -99,7 +122,7 @@ export class IoNextService {
     });
     const colorWidget = (dash.color_widgets ?? [])[0];
     if (!colorWidget?.settings) {
-      return { online: false, devices: {} };
+      return { fresh: false, devices: {} };
     }
     const settings = JSON.parse(colorWidget.settings);
     // 2. Read the live values from the datalogger via the proxy.
@@ -112,7 +135,11 @@ export class IoNextService {
     });
     const online = live.parameters?.datalogger === 'online';
     const devices = live.parameters?.data?.data ?? {};
-    return { online, devices };
+    // Trust a reading only when the logger says it's online AND the newest
+    // record is recent. When the logger is offline the proxy replays a stale
+    // file (seen days later as "live"), which is exactly what we must not do.
+    const fresh = online && this.readingAgeMinutes(devices) <= 30;
+    return { fresh, devices };
   }
 
   private num(v: unknown): number {
@@ -134,7 +161,7 @@ export class IoNextService {
   }
 
   async getDevices(plantPk: string): Promise<ProviderDevice[]> {
-    const { online, devices } = await this.fetchLiveData(plantPk);
+    const { fresh, devices } = await this.fetchLiveData(plantPk);
     const out: ProviderDevice[] = [];
     for (const [name, v] of Object.entries(devices)) {
       const type = this.classify(name);
@@ -143,20 +170,22 @@ export class IoNextService {
       const sumA = this.num(v.Curr_R) + this.num(v.Curr_Y) + this.num(v.Curr_B);
       // Inverters expose Active_Pow / Energy_Today; DG meters do not.
       const power = type === 'INVERTER' ? this.num(v.Active_Pow) : this.num(v.Total_Pow);
-      const today = this.num(v.Energy_Today);
       out.push({
         id: `${plantPk}:${name}`,
         name,
         type,
-        // A device is live only if it's reporting power or voltage right now.
-        status: !online ? 'INACTIVE' : power > 0 || avgV > 0 ? 'ACTIVE' : 'INACTIVE',
+        // When the reading is stale, the device is offline — don't show old
+        // power/voltage as if it were current.
+        status: fresh && (power > 0 || avgV > 0) ? 'ACTIVE' : 'INACTIVE',
         capacity: this.capacityFromName(name),
-        activePowerKw: parseFloat(power.toFixed(2)),
-        dailyEnergyKwh: parseFloat(today.toFixed(1)),
+        activePowerKw: fresh ? parseFloat(power.toFixed(2)) : 0,
+        dailyEnergyKwh: fresh ? parseFloat(this.num(v.Energy_Today).toFixed(1)) : 0,
+        // The lifetime counter is still the last-known-good value even when
+        // offline; billing reads it as a cumulative meter, so keep it.
         totalEnergyKwh: parseFloat(this.num(v.Tot_Energy).toFixed(1)),
-        acVoltage: parseFloat(avgV.toFixed(1)),
-        acCurrent: parseFloat(sumA.toFixed(1)),
-        acFrequency: parseFloat(this.num(v.Freq).toFixed(2)),
+        acVoltage: fresh ? parseFloat(avgV.toFixed(1)) : 0,
+        acCurrent: fresh ? parseFloat(sumA.toFixed(1)) : 0,
+        acFrequency: fresh ? parseFloat(this.num(v.Freq).toFixed(2)) : 0,
       });
     }
     return out;
@@ -275,7 +304,7 @@ export class IoNextService {
   }
 
   async getSummary(plantPk: string): Promise<ProviderSummary> {
-    const { online, devices } = await this.fetchLiveData(plantPk);
+    const { fresh, devices } = await this.fetchLiveData(plantPk);
     let livePower = 0;
     let dailyEnergy = 0;
     let totalEnergyKwh = 0;
@@ -286,11 +315,14 @@ export class IoNextService {
       totalEnergyKwh += this.num(v.Tot_Energy);
     }
     return {
-      livePower: parseFloat(livePower.toFixed(1)),
-      dailyEnergy: parseFloat(dailyEnergy.toFixed(1)),
-      totalEnergy: parseFloat((totalEnergyKwh / 1000).toFixed(1)), // MWh
+      // Stale readings mean the plant isn't reporting: show no live power and
+      // no "today" rather than replaying a days-old file as the current value.
+      livePower: fresh ? parseFloat(livePower.toFixed(1)) : 0,
+      dailyEnergy: fresh ? parseFloat(dailyEnergy.toFixed(1)) : 0,
+      totalEnergy: parseFloat((totalEnergyKwh / 1000).toFixed(1)), // MWh (last known)
       cuf: 0, // IO.Next doesn't expose CUF
-      status: online ? 'Active' : 'Inactive',
+      status: fresh ? 'Active' : 'Inactive',
+      fresh,
     };
   }
 }
