@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import '../../../../core/widgets/interactive_multiline_chart.dart';
 import '../../../../core/widgets/user_avatar.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -623,21 +624,29 @@ class _TelemetryDashboardScreenState extends ConsumerState<TelemetryDashboardScr
             style: TextStyle(color: _slateLight, fontSize: 11, fontWeight: FontWeight.w500),
           ),
           const SizedBox(height: 18),
-          SizedBox(
-            height: 90,
-            width: double.infinity,
-            child: _series.length < 2
-                ? const Center(
-                    child: Text('Not enough data for this window',
-                        style: TextStyle(color: _slateLight, fontSize: 11)),
-                  )
-                : CustomPaint(
-                    painter: PhaseChartPainter(
-                      voltage: _series.map((p) => p.avgVoltage).toList(),
-                      current: _series.map((p) => p.totalCurrent).toList(),
-                    ),
-                  ),
-          ),
+          if (_series.length < 2)
+            const SizedBox(
+              height: 90,
+              child: Center(
+                child: Text('Not enough data for this window',
+                    style: TextStyle(color: _slateLight, fontSize: 11)),
+              ),
+            )
+          else
+            InteractiveMultiLineChart(
+              height: 100,
+              times: _series.map((p) => p.timestamp).toList(),
+              lines: [
+                ChartLine(
+                  values: _series.map((p) => p.avgVoltage).toList(),
+                  color: _teal, label: 'Voltage', unit: 'V',
+                ),
+                ChartLine(
+                  values: _series.map((p) => p.totalCurrent).toList(),
+                  color: const Color(0xFFF5A623), label: 'Current', unit: 'A',
+                ),
+              ],
+            ),
           const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,

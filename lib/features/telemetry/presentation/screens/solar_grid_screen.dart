@@ -7,6 +7,7 @@ import '../../../ticketing/data/plants_repository.dart';
 import '../../../ticketing/domain/plant_model.dart';
 import '../../data/telemetry_repository.dart';
 import '../../../../core/widgets/grouped_bar_chart.dart';
+import '../../../../core/widgets/interactive_multiline_chart.dart';
 import '../widgets/chart_painters.dart';
 
 class SolarGridScreen extends ConsumerStatefulWidget {
@@ -866,21 +867,34 @@ class _SolarGridScreenState extends ConsumerState<SolarGridScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          SizedBox(
-            height: 90,
-            width: double.infinity,
-            child: _series.length < 2
-                ? const Center(
-                    child: Text('Not enough data yet — collecting live telemetry',
-                        style: TextStyle(color: _slateLight, fontSize: 11)),
-                  )
-                : CustomPaint(
-                    painter: TelemetryChartPainter(
-                      voltage: _series.map((p) => p.avgVoltage).toList(),
-                      current: _series.map((p) => p.totalCurrent).toList(),
-                    ),
-                  ),
-          ),
+          if (_series.length < 2)
+            const SizedBox(
+              height: 90,
+              child: Center(
+                child: Text('Not enough data yet — collecting live telemetry',
+                    style: TextStyle(color: _slateLight, fontSize: 11)),
+              ),
+            )
+          else
+            // Scrub across it to read voltage and current at any moment.
+            InteractiveMultiLineChart(
+              height: 100,
+              times: _series.map((p) => p.timestamp).toList(),
+              lines: [
+                ChartLine(
+                  values: _series.map((p) => p.avgVoltage).toList(),
+                  color: _teal,
+                  label: 'Voltage',
+                  unit: 'V',
+                ),
+                ChartLine(
+                  values: _series.map((p) => p.totalCurrent).toList(),
+                  color: const Color(0xFFF5A623),
+                  label: 'Current',
+                  unit: 'A',
+                ),
+              ],
+            ),
           if (_series.length >= 2) ...[
             const SizedBox(height: 8),
             Row(
@@ -899,9 +913,9 @@ class _SolarGridScreenState extends ConsumerState<SolarGridScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _chartLegendIndicator(true, 'Voltage (V)'),
+              _chartLegendIndicator(_teal, 'Voltage (V)'),
               const SizedBox(width: 20),
-              _chartLegendIndicator(false, 'Current (A)'),
+              _chartLegendIndicator(const Color(0xFFF5A623), 'Current (A)'),
             ],
           ),
         ],
@@ -909,14 +923,14 @@ class _SolarGridScreenState extends ConsumerState<SolarGridScreen> {
     );
   }
 
-  Widget _chartLegendIndicator(bool isSolid, String label) {
+  Widget _chartLegendIndicator(Color color, String label) {
     return Row(
       children: [
         SizedBox(
           width: 20,
           child: CustomPaint(
             size: const Size(20, 3),
-            painter: LineLegendPainter(isSolid: isSolid, color: _teal),
+            painter: LineLegendPainter(isSolid: true, color: color),
           ),
         ),
         const SizedBox(width: 6),
