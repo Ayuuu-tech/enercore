@@ -103,6 +103,23 @@ class TelemetryRepository {
     }
   }
 
+  /// Per-device daily generation over the last [days] days — the "generation
+  /// by inverter" bar chart.
+  Future<DeviceDailySeries> getDeviceDaily(String plantId, {int days = 14}) async {
+    final token = _authRepository.token;
+    final response = await httpGet(
+      Uri.parse('${_authRepository.baseUrl}/telemetry/plant/$plantId/device-daily?days=$days'),
+      headers: {
+        'Content-Type': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      },
+    );
+    if (response.statusCode == 200) {
+      return DeviceDailySeries.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    }
+    throw Exception('Failed to fetch device generation: ${response.statusCode}');
+  }
+
   /// Fetches time-bucketed telemetry aggregates for a plant.
   Future<List<TelemetrySeriesPoint>> getSeries(String plantId, int hours) async {
     final token = _authRepository.token;
@@ -335,6 +352,38 @@ class TelemetrySeriesPoint {
       totalCurrent: (json['totalCurrent'] as num?)?.toDouble() ?? 0.0,
       avgTemperature: (json['avgTemperature'] as num?)?.toDouble() ?? 0.0,
       totalGeneration: (json['totalGeneration'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+}
+
+/// One day's generation for each device.
+class DeviceDayGeneration {
+  final String day; // "YYYY-MM-DD"
+  final List<double> values; // aligned to DeviceDailySeries.devices
+
+  const DeviceDayGeneration({required this.day, required this.values});
+
+  double get total => values.fold(0, (s, v) => s + v);
+}
+
+/// Per-device daily generation for a plant — powers the inverter bar chart.
+class DeviceDailySeries {
+  final List<String> devices;
+  final List<DeviceDayGeneration> series;
+
+  const DeviceDailySeries({required this.devices, required this.series});
+
+  factory DeviceDailySeries.fromJson(Map<String, dynamic> j) {
+    return DeviceDailySeries(
+      devices: (j['devices'] as List<dynamic>? ?? []).map((e) => e.toString()).toList(),
+      series: (j['series'] as List<dynamic>? ?? [])
+          .map((s) => DeviceDayGeneration(
+                day: (s as Map<String, dynamic>)['day'] as String,
+                values: (s['values'] as List<dynamic>? ?? [])
+                    .map((v) => (v as num).toDouble())
+                    .toList(),
+              ))
+          .toList(),
     );
   }
 }

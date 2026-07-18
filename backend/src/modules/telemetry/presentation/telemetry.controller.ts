@@ -11,6 +11,7 @@ import { PlantAccessService } from '../../../common/access/plant-access.service'
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { IoNextSyncService } from '../application/ionext-sync.service';
 import { IoNextService } from '../application/ionext.service';
+import { istDay } from '../../../common/util/ist-day';
 
 @Controller('telemetry')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -86,6 +87,41 @@ export class TelemetryController {
       return this.ioNextSync.getDevices(plantId, plant.externalKey);
     }
     return this.tracksoReportService.getDevices(plantId);
+  }
+
+  /**
+   * Per-device daily generation over the last N days — the "generation by
+   * inverter" bar chart. Read from the daily snapshots we record for every
+   * plant, so it's the same source (and the same numbers) as billing.
+   */
+  @Get('plant/:plantId/device-daily')
+  async getDeviceDaily(
+    @Param('plantId') plantId: string,
+    @CurrentUser() user: UserEntity,
+    @Query('days') days?: string,
+  ) {
+    await this.plantAccess.assertPlantAccess(user, plantId);
+    const n = Math.min(90, Math.max(1, parseInt(days ?? '14', 10) || 14));
+    const from = istDay(Date.now() - (n - 1) * 24 * 60 * 60 * 1000);
+
+    const rows = await this.prisma.deviceDailyEnergy.findMany({
+      where: { plantId, day: { gte: from } },
+      orderBy: { day: 'asc' },
+      select: { deviceName: true, day: true, energyKwh: true },
+    });
+
+    // Stable device order, and a value per device per day (0 when a device
+    // didn't report that day) so the chart's grouped bars stay aligned.
+    const devices = [...new Set(rows.map((r) => r.deviceName))].sort();
+    const byDay = new Map<string, Record<string, number>>();
+    for (const r of rows) {
+      (byDay.get(r.day) ?? byDay.set(r.day, {}).get(r.day)!)[r.deviceName] = r.energyKwh;
+    }
+    const series = [...byDay.entries()].map(([day, vals]) => ({
+      day,
+      values: devices.map((d) => parseFloat((vals[d] ?? 0).toFixed(1))),
+    }));
+    return { devices, series };
   }
 
   @Post()

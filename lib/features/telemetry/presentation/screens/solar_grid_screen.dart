@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../ticketing/data/plants_repository.dart';
 import '../../../ticketing/domain/plant_model.dart';
 import '../../data/telemetry_repository.dart';
+import '../../../../core/widgets/grouped_bar_chart.dart';
 import '../widgets/chart_painters.dart';
 
 class SolarGridScreen extends ConsumerStatefulWidget {
@@ -22,6 +23,7 @@ class _SolarGridScreenState extends ConsumerState<SolarGridScreen> {
   PlantModel? _plant;
   List<DeviceModel> _devices = [];
   List<TelemetrySeriesPoint> _series = [];
+  DeviceDailySeries? _deviceDaily;
   bool _loading = true;
   bool _noPlants = false;
   String? _error;
@@ -70,12 +72,14 @@ class _SolarGridScreenState extends ConsumerState<SolarGridScreen> {
       final results = await Future.wait<dynamic>([
         telemetryRepo.getSeries(plant.id, 6),
         telemetryRepo.getDevices(plant.id),
+        telemetryRepo.getDeviceDaily(plant.id, days: 14),
       ]);
       if (!mounted) return;
       setState(() {
         _plant = plant;
         _series = results[0] as List<TelemetrySeriesPoint>;
         _devices = results[1] as List<DeviceModel>;
+        _deviceDaily = results[2] as DeviceDailySeries;
         _loading = false;
         _error = null;
       });
@@ -181,6 +185,8 @@ class _SolarGridScreenState extends ConsumerState<SolarGridScreen> {
                           _liveTelemetryCard(),
                           const SizedBox(height: 16),
                           _voltageCurrentChart(),
+                          const SizedBox(height: 16),
+                          _generationByDeviceCard(),
                           const SizedBox(height: 16),
                           _faultHistoryCard(),
                           const SizedBox(height: 24),
@@ -811,6 +817,41 @@ class _SolarGridScreenState extends ConsumerState<SolarGridScreen> {
   }
 
   // ── Voltage & Current Chart ────────────────────────────────────────────────
+  Widget _generationByDeviceCard() {
+    final data = _deviceDaily;
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    final days = (data?.series ?? []).map((s) {
+      final p = s.day.split('-'); // YYYY-MM-DD
+      final label = p.length == 3 ? '${int.parse(p[2])} ${months[int.parse(p[1]) - 1]}' : s.day;
+      return GroupedBarDay(label: label, values: s.values);
+    }).toList();
+
+    return _card_(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Generation by inverter',
+                  style: TextStyle(color: _slateDark, fontSize: 14, fontWeight: FontWeight.w700)),
+              const Text('kWh / day',
+                  style: TextStyle(color: _slateLight, fontSize: 10, fontWeight: FontWeight.w600)),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (data == null)
+            const SizedBox(
+              height: 180,
+              child: Center(child: CircularProgressIndicator(color: _teal, strokeWidth: 2)),
+            )
+          else
+            GroupedBarChart(series: data.devices, days: days, unit: 'kWh', height: 180),
+        ],
+      ),
+    );
+  }
+
   Widget _voltageCurrentChart() {
     return _card_(
       child: Column(
