@@ -87,59 +87,89 @@ export class IoNextService {
     return res.json();
   }
 
-  /**
-   * Age of the freshest reading in a device set, in minutes, or Infinity if no
-   * reading carries a timestamp. Records are stamped "DD/MM/YY" + "HH:MM:SS" in
-   * IST; when the datalogger goes offline the proxy keeps returning the last
-   * file it saw, so this is how we tell "live" from "days old".
-   */
-  private readingAgeMinutes(devices: Record<string, Record<string, string>>): number {
-    let newest = 0;
-    for (const v of Object.values(devices)) {
-      const dm = /^(\d{2})\/(\d{2})\/(\d{2})$/.exec(String(v.Date ?? ''));
-      const tm = /^(\d{2}):(\d{2}):(\d{2})$/.exec(String(v.Time ?? ''));
-      if (!dm || !tm) continue;
-      const [, dd, mm, yy] = dm;
-      const [, hh, mi, ss] = tm;
-      // Interpret as IST, convert to a UTC instant.
-      const utc = Date.UTC(2000 + +yy, +mm - 1, +dd, +hh, +mi, +ss) - IST_OFFSET_MS;
-      if (utc > newest) newest = utc;
-    }
-    return newest === 0 ? Infinity : (Date.now() - newest) / 60000;
+  // Per-plant meter + parameter catalogue (device pk and each parameter's pk).
+  // It's configuration, not telemetry, so cache it for an hour.
+  private meterCatalogue = new Map<
+    string,
+    { expires: number; meters: { pk: number; label: string; params: Record<string, number> }[] }
+  >();
+
+  private async getMeters(externalKey: string) {
+    const cached = this.meterCatalogue.get(externalKey);
+    if (cached && Date.now() < cached.expires) return cached.meters;
+
+    const form = await this.post('by_device_form', { clients: [Number(externalKey)] });
+    const meters = ((form.meters ?? []) as any[]).map((m) => ({
+      pk: m.pk as number,
+      label: m.label as string,
+      params: Object.fromEntries(
+        ((m.meter_parameter ?? []) as any[]).map((p) => [p.name as string, p.pk as number]),
+      ) as Record<string, number>,
+    }));
+    this.meterCatalogue.set(externalKey, { expires: Date.now() + 60 * 60 * 1000, meters });
+    return meters;
   }
 
-  /** Raw live readings for every device on a plant, keyed by device name. */
+  /** Today's date as the portal wants it: DD/MM/YYYY in IST. */
+  private istDateSlash(ms: number): string {
+    const [y, m, d] = istDay(ms).split('-');
+    return `${d}/${m}/${y}`;
+  }
+
+  /**
+   * Latest reading today for every device, via the portal's own chart backend
+   * (`by_device_form_submit`).
+   *
+   * We used to read the datalogger proxy (`color_widget_value`) directly, but
+   * that stalls the moment the logger drops — it replays a days-old file that
+   * looks live. This endpoint is served from IO.Next's database instead, so it
+   * stays fresh through a logger blip and matches what their portal shows.
+   */
   private async fetchLiveData(plantPk: string): Promise<{
     fresh: boolean;
-    devices: Record<string, Record<string, string>>;
+    devices: Record<string, Record<string, number>>;
   }> {
-    const { companyPk } = await this.login();
-    // 1. Dashboard config → the colorWidget holds the datalogger connection.
-    const dash = await this.post('dashboard_widgets', {
-      dashboard_label: 'plant',
-      id: Number(plantPk),
-      company_name_pk: companyPk,
-    });
-    const colorWidget = (dash.color_widgets ?? [])[0];
-    if (!colorWidget?.settings) {
-      return { fresh: false, devices: {} };
+    const meters = await this.getMeters(plantPk);
+    if (meters.length === 0) return { fresh: false, devices: {} };
+
+    const wanted = [
+      'Active_Pow', 'Total_Pow', 'Energy_Today', 'Tot_Energy',
+      'Volt_R', 'Volt_Y', 'Volt_B', 'Curr_R', 'Curr_Y', 'Curr_B', 'Freq',
+    ];
+    const meterPks: number[] = [];
+    const paramPks: number[] = [];
+    for (const m of meters) {
+      meterPks.push(m.pk);
+      for (const name of wanted) if (m.params[name] != null) paramPks.push(m.params[name]);
     }
-    const settings = JSON.parse(colorWidget.settings);
-    // 2. Read the live values from the datalogger via the proxy.
-    const live = await this.post('color_widget_value', {
-      name: settings.name,
-      host: settings.host,
-      port: settings.port,
-      user: settings.user,
-      password: settings.password,
+
+    const today = this.istDateSlash(Date.now());
+    const res = await this.post('by_device_form_submit', {
+      meters: meterPks,
+      parameters: paramPks,
+      date_range: `${today}-${today}`,
+      frequency: '1440', // daily bucket
+      operation: 'Last Value', // the most recent reading in the bucket
+      duration1: '00:00',
+      duration2: '00:00',
     });
-    const online = live.parameters?.datalogger === 'online';
-    const devices = live.parameters?.data?.data ?? {};
-    // Trust a reading only when the logger says it's online AND the newest
-    // record is recent. When the logger is offline the proxy replays a stale
-    // file (seen days later as "live"), which is exactly what we must not do.
-    const fresh = online && this.readingAgeMinutes(devices) <= 30;
-    return { fresh, devices };
+
+    const csv: any[][] = res.csv_data ?? [];
+    const devices: Record<string, Record<string, number>> = {};
+    if (csv.length < 2) return { fresh: false, devices };
+
+    const headers = csv[0].map(String); // "Active_Pow-Inverter_1-Hella India"
+    const row = csv[csv.length - 1]; // today's row
+    for (let i = 1; i < headers.length; i++) {
+      const match = /^(.+?)-(.+?)-/.exec(headers[i]);
+      if (!match) continue;
+      const [, param, device] = match;
+      const v = Number(row[i]);
+      if (!Number.isFinite(v)) continue;
+      (devices[device] ??= {})[param] = v;
+    }
+    // If the plant genuinely hasn't reported today, there are no device columns.
+    return { fresh: Object.keys(devices).length > 0, devices };
   }
 
   private num(v: unknown): number {

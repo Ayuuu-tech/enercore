@@ -8,6 +8,7 @@ import '../../../telemetry/data/telemetry_repository.dart';
 import '../../../profile/application/profile_controller.dart';
 import '../../../../core/widgets/user_avatar.dart';
 import '../widgets/plant_map_view.dart';
+import '../../../../core/widgets/interactive_line_chart.dart';
 
 class ClientDashboardScreen extends ConsumerStatefulWidget {
   const ClientDashboardScreen({super.key});
@@ -552,15 +553,14 @@ class _ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
                   });
                   return Column(
                     children: [
-                      SizedBox(
-                        height: 100,
-                        width: double.infinity,
-                        child: CustomPaint(
-                          painter: _ChartPainter(
-                            color: _teal,
-                            values: series.map((p) => p.totalGeneration).toList(),
-                          ),
-                        ),
+                      // Touch or drag across the line to read the value at any
+                      // point in time — generation is in kW (rows store watts).
+                      InteractiveLineChart(
+                        height: 108,
+                        color: _teal,
+                        unit: 'kW',
+                        values: series.map((p) => p.totalGeneration / 1000).toList(),
+                        times: series.map((p) => p.timestamp).toList(),
                       ),
                       const SizedBox(height: 10),
                       Row(
@@ -1115,84 +1115,6 @@ class _ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
   }
 }
 
-// ── Smooth line chart painter ─────────────────────────────────────────────────
-class _ChartPainter extends CustomPainter {
-  final Color color;
-  final List<double> values;
-  _ChartPainter({required this.color, required this.values});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (values.length < 2) return;
-    final maxV = values.reduce(math.max);
-    final range = maxV <= 0 ? 1.0 : maxV;
-    final pts = <Offset>[];
-    for (int i = 0; i < values.length; i++) {
-      final x = size.width * i / (values.length - 1);
-      // Baseline at the bottom, peak at 8% from the top
-      final y = size.height * (1.0 - 0.92 * (values[i] / range).clamp(0.0, 1.0));
-      pts.add(Offset(x, y));
-    }
-
-    final linePath = _smoothPath(pts);
-
-    // Fill
-    final fillPath = Path.from(linePath);
-    fillPath.lineTo(size.width, size.height);
-    fillPath.lineTo(0, size.height);
-    fillPath.close();
-
-    final fillPaint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [color.withValues(alpha: 0.18), color.withValues(alpha: 0.0)],
-      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height))
-      ..style = PaintingStyle.fill;
-    canvas.drawPath(fillPath, fillPaint);
-
-    // Line
-    final linePaint = Paint()
-      ..color = color
-      ..strokeWidth = 3.0
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-    canvas.drawPath(linePath, linePaint);
-
-    // Dot at peak
-    canvas.drawCircle(
-        pts[4],
-        5,
-        Paint()
-          ..color = color
-          ..style = PaintingStyle.fill);
-    canvas.drawCircle(
-        pts[4],
-        5,
-        Paint()
-          ..color = Colors.white
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2.0);
-  }
-
-  Path _smoothPath(List<Offset> pts) {
-    final path = Path();
-    path.moveTo(pts[0].dx, pts[0].dy);
-    for (int i = 0; i < pts.length - 1; i++) {
-      final cp1 =
-          Offset((pts[i].dx + pts[i + 1].dx) / 2, pts[i].dy);
-      final cp2 = Offset(
-          (pts[i].dx + pts[i + 1].dx) / 2, pts[i + 1].dy);
-      path.cubicTo(
-          cp1.dx, cp1.dy, cp2.dx, cp2.dy, pts[i + 1].dx, pts[i + 1].dy);
-    }
-    return path;
-  }
-
-  @override
-  bool shouldRepaint(covariant _ChartPainter old) => old.values != values;
-}
 
 // ── Arc gauge painter ─────────────────────────────────────────────────────────
 class _GaugePainter extends CustomPainter {
