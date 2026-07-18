@@ -9,6 +9,7 @@ import '../../data/telemetry_repository.dart';
 import '../../../../core/widgets/grouped_bar_chart.dart';
 import '../../../../core/widgets/interactive_multiline_chart.dart';
 import '../widgets/chart_painters.dart';
+import '../widgets/single_line_diagram.dart';
 
 class SolarGridScreen extends ConsumerStatefulWidget {
   const SolarGridScreen({super.key});
@@ -188,6 +189,8 @@ class _SolarGridScreenState extends ConsumerState<SolarGridScreen> {
                           _voltageCurrentChart(),
                           const SizedBox(height: 16),
                           _generationByDeviceCard(),
+                          const SizedBox(height: 16),
+                          _siteLayoutCard(),
                           const SizedBox(height: 16),
                           _faultHistoryCard(),
                           const SizedBox(height: 24),
@@ -818,6 +821,26 @@ class _SolarGridScreenState extends ConsumerState<SolarGridScreen> {
   }
 
   // ── Voltage & Current Chart ────────────────────────────────────────────────
+  Widget _siteLayoutCard() {
+    return _card_(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Site Layout',
+              style: TextStyle(color: _slateDark, fontSize: 14, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 4),
+          const Text('Single-line diagram — live',
+              style: TextStyle(color: _slateLight, fontSize: 10.5)),
+          const SizedBox(height: 16),
+          SingleLineDiagram(
+            capacityKwp: _plant?.peakCapacity ?? 0,
+            devices: _devices,
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _generationByDeviceCard() {
     final data = _deviceDaily;
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
