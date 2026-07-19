@@ -94,6 +94,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         final role = user.role.toUpperCase();
         if (role == 'ADMIN') return '/admin-dashboard';
         if (role == 'VENDOR') return '/vendor-dashboard';
+        // A self-signed-up shop customer has marketplace access but not plants;
+        // send them straight to the shop rather than an empty plant dashboard.
+        if (!user.canAccess('plants')) return '/marketplace';
         return '/client-dashboard';
       }
       // Module gating: non-admins can't open a feature they lack access to.

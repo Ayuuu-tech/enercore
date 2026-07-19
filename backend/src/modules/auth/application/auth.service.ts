@@ -49,6 +49,10 @@ export class AuthService {
           name: dto.name,
           role: dto.role,
           phone: dto.phone,
+          // Anyone who signs up themselves is a shop customer: they get the
+          // marketplace and nothing else. Clients with plants (dashboards,
+          // telemetry, billing) are provisioned by an admin, who widens this.
+          ...(dto.role === Role.CLIENT ? { modules: ['marketplace'] } : {}),
         },
       });
 
@@ -70,6 +74,7 @@ export class AuthService {
         email: user.email,
         name: user.name,
         role: user.role,
+        modules: user.modules,
       },
       accessToken: this.signToken(user),
     };

@@ -6,6 +6,7 @@ import '../../../vendor/domain/vendor_models.dart';
 import '../../data/marketplace_repository.dart';
 import '../../application/cart_controller.dart';
 import '../../domain/pricing.dart';
+import '../../../auth/application/auth_controller.dart';
 
 class MarketplaceHomeScreen extends ConsumerStatefulWidget {
   const MarketplaceHomeScreen({super.key});
@@ -477,14 +478,28 @@ class _MarketplaceHomeScreenState extends ConsumerState<MarketplaceHomeScreen> {
 
   // ── Bottom Nav ─────────────────────────────────────────────────────────────
   Widget _bottomNav() {
-    final items = [
-      (Icons.home_rounded, 'Home'),
-      (Icons.solar_power_rounded, 'Plants'),
-      (Icons.sensors_rounded, 'Telemetry'),
-      (Icons.receipt_long_rounded, 'Billing'),
-      (Icons.confirmation_number_outlined, 'Tickets'),
-    ];
-    final routes = ['/client-dashboard', '/solar-grid', '/telemetry', '/billing', '/tickets'];
+    // A shop-only customer (no plant access) gets a shop-focused nav; the client
+    // dashboard tabs would only bounce them back through the module gate.
+    final shopOnly = !(ref.watch(authControllerProvider).value?.canAccess('plants') ?? true);
+    late final List<(IconData, String)> items;
+    late final List<String> routes;
+    if (shopOnly) {
+      items = const [
+        (Icons.storefront_rounded, 'Shop'),
+        (Icons.shopping_cart_outlined, 'Cart'),
+        (Icons.person_outline_rounded, 'Profile'),
+      ];
+      routes = ['/marketplace', '/cart', '/profile'];
+    } else {
+      items = const [
+        (Icons.home_rounded, 'Home'),
+        (Icons.solar_power_rounded, 'Plants'),
+        (Icons.sensors_rounded, 'Telemetry'),
+        (Icons.receipt_long_rounded, 'Billing'),
+        (Icons.confirmation_number_outlined, 'Tickets'),
+      ];
+      routes = ['/client-dashboard', '/solar-grid', '/telemetry', '/billing', '/tickets'];
+    }
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
