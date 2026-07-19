@@ -551,10 +551,22 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
   Widget _bottomNav() {
     // The profile screen is reachable from every role's dashboard, so its nav
     // has to match whoever is signed in — an admin was seeing the client tabs.
-    final role = ref.watch(authControllerProvider).asData?.value?.role.toUpperCase();
+    final user = ref.watch(authControllerProvider).asData?.value;
+    final role = user?.role.toUpperCase();
+    // A self-signed-up shop customer is a CLIENT without plant access; they get
+    // the shop nav, not the client dashboard tabs they can't open.
+    final shopOnly = role == 'CLIENT' && !(user?.canAccess('plants') ?? true);
 
     late final List<(IconData, String)> items;
     late final List<String?> routes;
+    if (shopOnly) {
+      items = const [
+        (Icons.storefront_rounded, 'Shop'),
+        (Icons.shopping_cart_outlined, 'Cart'),
+        (Icons.person_rounded, 'Profile'),
+      ];
+      routes = ['/marketplace', '/cart', null];
+    } else {
     switch (role) {
       case 'ADMIN':
         items = const [
@@ -584,6 +596,7 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
           (Icons.confirmation_number_outlined, 'Tickets'),
         ];
         routes = ['/client-dashboard', '/solar-grid', '/telemetry', '/billing', '/tickets'];
+    }
     }
     // The Profile tab (a null route, when present) marks the current screen.
     final activeIndex = routes.indexOf(null);
