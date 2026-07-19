@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../application/auth_controller.dart';
-import '../../../data/auth_repository.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   final String role;
@@ -78,65 +77,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     );
   }
 
-  void _showServerSettings(BuildContext context) {
-    final controller = TextEditingController(
-      text: HttpAuthRepository.customUrl ?? 'http://localhost:3000/api',
-    );
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Server Configuration', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Enter Backend API base URL:',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: controller,
-              decoration: InputDecoration(
-                hintText: 'http://192.168.1.XX:3000/api',
-                hintStyle: const TextStyle(fontSize: 12),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              ),
-              style: const TextStyle(fontSize: 13),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2A8C6E),
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () {
-              setState(() {
-                HttpAuthRepository.customUrl = controller.text.trim();
-              });
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Server URL set to: ${HttpAuthRepository.customUrl}'),
-                  backgroundColor: const Color(0xFF2A8C6E),
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
-            },
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final isLoading = ref.watch(authControllerProvider).isLoading;
@@ -159,37 +99,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                     Image.asset(
                       'assets/images/logo.png',
                       height: 28,
-                    ),
-                    // Server Settings + Help button
-                    Row(
-                      children: [
-                        GestureDetector(
-                          onTap: () => _showServerSettings(context),
-                          child: Container(
-                            width: 30,
-                            height: 30,
-                            margin: const EdgeInsets.only(right: 8),
-                            decoration: BoxDecoration(
-                              color: Colors.grey.shade100,
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Colors.grey.shade300),
-                            ),
-                            child: const Icon(Icons.settings_outlined,
-                                color: Colors.grey, size: 17),
-                          ),
-                        ),
-                        Container(
-                          width: 30,
-                          height: 30,
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade100,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.grey.shade300),
-                          ),
-                          child: const Icon(Icons.help_outline,
-                              color: Colors.grey, size: 17),
-                        ),
-                      ],
                     ),
                   ],
                 ),
@@ -360,7 +269,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                         ),
                         const SizedBox(height: 12),
 
-                        // ── Request Access button ─────────────────────
+                        // ── Sign up button ────────────────────────────
                         SizedBox(
                           width: double.infinity,
                           height: 50,
@@ -375,30 +284,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                               ),
                             ),
                             child: const Text(
-                              'Request Access',
+                              'Sign up',
                               style: TextStyle(
                                   fontSize: 14,
-                                  fontWeight: FontWeight.w500),
+                                  fontWeight: FontWeight.w600),
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 20),
-
-                        // ── System Status ─────────────────────────────
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Text('⭐',
-                                style: TextStyle(fontSize: 12)),
-                            const SizedBox(width: 6),
-                            Text(
-                              'System Status: Optimal',
-                              style: TextStyle(
-                                color: Colors.grey.shade500,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
                         ),
                       ],
                     ),
@@ -417,17 +308,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                       alignment: WrapAlignment.center,
                       spacing: 6,
                       children: [
-                        _footerLink('Privacy Policy'),
+                        _footerLink('Privacy Policy', () => context.push('/privacy')),
                         Text('·',
                             style: TextStyle(
                                 color: Colors.grey.shade400,
                                 fontSize: 13)),
-                        _footerLink('Terms of Service'),
-                        Text('·',
-                            style: TextStyle(
-                                color: Colors.grey.shade400,
-                                fontSize: 13)),
-                        _footerLink('System Status'),
+                        _footerLink('Terms of Service', () => context.push('/terms')),
                       ],
                     ),
                     const SizedBox(height: 6),
@@ -500,8 +386,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     );
   }
 
-  Widget _footerLink(String label) => GestureDetector(
-        onTap: () {},
+  Widget _footerLink(String label, VoidCallback onTap) => GestureDetector(
+        onTap: onTap,
         child: Text(
           label,
           style: TextStyle(

@@ -6,6 +6,7 @@ import '../../features/auth/presentation/screens/auth/splash_screen.dart';
 import '../../features/auth/presentation/screens/auth/login_screen.dart';
 import '../../features/auth/presentation/screens/auth/register_screen.dart';
 import '../../features/auth/presentation/screens/auth/forgot_password_screen.dart';
+import '../../features/auth/presentation/screens/auth/legal_screen.dart';
 import '../../features/auth/presentation/screens/onboarding/onboarding_screen.dart';
 import '../../features/dashboard/presentation/screens/client_dashboard_screen.dart';
 import '../../features/dashboard/presentation/screens/alerts_screen.dart';
@@ -41,6 +42,7 @@ import '../../features/profile/presentation/screens/profile_settings_screen.dart
 
 final _authRoutes = <String>{
   '/splash', '/onboarding', '/login', '/register', '/forgot-password',
+  '/privacy', '/terms',
 };
 
 // Client feature routes gated by per-user module permissions. Admins bypass.
@@ -131,6 +133,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     GoRoute(
       path: '/forgot-password',
       builder: (context, state) => const ForgotPasswordScreen(),
+    ),
+    GoRoute(
+      path: '/privacy',
+      builder: (context, state) => const LegalScreen(
+        title: 'Privacy Policy',
+        sections: privacyPolicySections,
+      ),
+    ),
+    GoRoute(
+      path: '/terms',
+      builder: (context, state) => const LegalScreen(
+        title: 'Terms of Service',
+        sections: termsSections,
+      ),
     ),
     GoRoute(
       path: '/client-dashboard',
