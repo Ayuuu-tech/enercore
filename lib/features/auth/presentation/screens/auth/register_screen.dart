@@ -1,5 +1,4 @@
-import 'dart:io' show SocketException;
-import 'package:http/http.dart' show ClientException;
+import '../../../../../core/http/api_error.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -86,15 +85,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
     } catch (e) {
       setState(() => _loading = false);
       if (mounted) {
-        String msg;
-        if (e is SocketException || e is ClientException) {
-          msg = 'Cannot reach server. On Android real device, run:\n  adb reverse tcp:3000 tcp:3000\nThen restart the app.';
-        } else {
-          msg = e.toString().replaceAll('Exception:', '');
-        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(msg),
+            content: Text(friendlyMessage(e)),
             backgroundColor: Colors.redAccent,
           ),
         );

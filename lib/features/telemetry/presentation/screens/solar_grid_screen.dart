@@ -10,6 +10,7 @@ import '../../../../core/widgets/grouped_bar_chart.dart';
 import '../../../../core/widgets/interactive_multiline_chart.dart';
 import '../widgets/chart_painters.dart';
 import '../widgets/single_line_diagram.dart';
+import '../../../../core/http/api_error.dart';
 
 class SolarGridScreen extends ConsumerStatefulWidget {
   const SolarGridScreen({super.key});
@@ -89,7 +90,7 @@ class _SolarGridScreenState extends ConsumerState<SolarGridScreen> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = e.toString();
+        _error = friendlyMessage(e);
       });
     }
   }

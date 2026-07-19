@@ -6,6 +6,7 @@ import '../../../vendor/domain/vendor_models.dart';
 import '../../data/marketplace_repository.dart';
 import '../../application/cart_controller.dart';
 import '../../domain/pricing.dart';
+import '../../../../core/http/api_error.dart';
 
 class ProductDetailScreen extends ConsumerStatefulWidget {
   final String? productId;
@@ -394,7 +395,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                       } catch (e) {
                         messenger.showSnackBar(SnackBar(
                           backgroundColor: const Color(0xFFEF4444),
-                          content: Text(e.toString().replaceFirst('Exception: ', '')),
+                          content: Text(friendlyMessage(e)),
                         ));
                       }
                     },

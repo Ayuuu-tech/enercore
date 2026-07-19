@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../data/billing_repository.dart';
 import '../../domain/invoice_model.dart';
 import '../../application/billing_controller.dart';
+import '../../../../core/http/api_error.dart';
 
 class InvoiceListScreen extends ConsumerStatefulWidget {
   const InvoiceListScreen({super.key});
@@ -34,7 +35,7 @@ class _InvoiceListScreenState extends ConsumerState<InvoiceListScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: const Color(0xFFEF4444),
-          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          content: Text(friendlyMessage(e)),
         ),
       );
     } finally {

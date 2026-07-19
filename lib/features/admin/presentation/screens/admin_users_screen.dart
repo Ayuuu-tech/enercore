@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../ticketing/data/plants_repository.dart';
 import '../../../ticketing/domain/plant_model.dart';
 import '../../data/admin_repository.dart';
+import '../../../../core/http/api_error.dart';
 
 class AdminUsersScreen extends ConsumerWidget {
   const AdminUsersScreen({super.key});
@@ -155,7 +156,7 @@ class AdminUsersScreen extends ConsumerWidget {
                   } catch (err) {
                     messenger.showSnackBar(SnackBar(
                       backgroundColor: const Color(0xFFEF4444),
-                      content: Text(err.toString().replaceFirst('Exception: ', '')),
+                      content: Text(friendlyMessage(err)),
                     ));
                   }
                 },
@@ -305,7 +306,7 @@ class AdminUsersScreen extends ConsumerWidget {
                     } catch (e) {
                       messenger.showSnackBar(SnackBar(
                         backgroundColor: const Color(0xFFEF4444),
-                        content: Text(e.toString().replaceFirst('Exception: ', '')),
+                        content: Text(friendlyMessage(e)),
                       ));
                     }
                   },
@@ -414,7 +415,7 @@ class AdminUsersScreen extends ConsumerWidget {
                     } catch (e) {
                       messenger.showSnackBar(SnackBar(
                         backgroundColor: const Color(0xFFEF4444),
-                        content: Text(e.toString().replaceFirst('Exception: ', '')),
+                        content: Text(friendlyMessage(e)),
                       ));
                     }
                   },
@@ -477,7 +478,7 @@ class _AssignPlantsSheetState extends ConsumerState<_AssignPlantsSheet> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = e.toString();
+        _error = friendlyMessage(e);
       });
     }
   }
@@ -496,7 +497,7 @@ class _AssignPlantsSheetState extends ConsumerState<_AssignPlantsSheet> {
         setState(() => _saving = false);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           backgroundColor: const Color(0xFFEF4444),
-          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          content: Text(friendlyMessage(e)),
         ));
       }
     }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../data/admin_repository.dart';
+import '../../../../core/http/api_error.dart';
 
 class AdminPlantsScreen extends ConsumerStatefulWidget {
   const AdminPlantsScreen({super.key});
@@ -205,7 +206,7 @@ class _AdminPlantsScreenState extends ConsumerState<AdminPlantsScreen> {
                     ref.invalidate(adminPlantsProvider);
                     _snack(editing ? 'Plant updated' : 'Plant created');
                   } catch (e) {
-                    _snack(e.toString(), error: true);
+                    _snack(friendlyMessage(e), error: true);
                   }
                 },
                 child: Text(editing ? 'Save' : 'Create', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
@@ -265,7 +266,7 @@ class _AdminPlantsScreenState extends ConsumerState<AdminPlantsScreen> {
                             ref.invalidate(adminPlantsProvider);
                             _snack('Ownership transferred to ${u.name}');
                           } catch (e) {
-                            _snack(e.toString(), error: true);
+                            _snack(friendlyMessage(e), error: true);
                           }
                         },
                       )).toList(),
@@ -296,7 +297,7 @@ class _AdminPlantsScreenState extends ConsumerState<AdminPlantsScreen> {
                 _snack('Plant deleted');
               } catch (e) {
                 nav.pop();
-                _snack(e.toString(), error: true);
+                _snack(friendlyMessage(e), error: true);
               }
             },
             child: const Text('Delete', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.w700)),

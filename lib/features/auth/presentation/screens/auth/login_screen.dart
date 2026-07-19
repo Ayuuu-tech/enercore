@@ -1,5 +1,4 @@
-import 'dart:io' show SocketException;
-import 'package:http/http.dart' show ClientException;
+import '../../../../../core/http/api_error.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -60,12 +59,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
           );
     } catch (e) {
       if (mounted) {
-        if (e is SocketException || e is ClientException) {
-          _showError('Cannot reach backend.\n\n1. STOP the app and run again (flutter run) — NOT hot reload\n2. Still failing? Tap ⚙ gear, enter your PC\'s LAN IP (e.g. http://192.168.x.x:3000/api), then Save.');
-        } else {
-          final msg = e.toString().replaceAll('Exception: ', '').replaceAll('Exception:', '');
-          _showError(msg.isNotEmpty ? msg : 'Unable to sign in. Check your credentials and server connection.');
-        }
+        _showError(friendlyMessage(e, context: 'login'));
       }
       return;
     }

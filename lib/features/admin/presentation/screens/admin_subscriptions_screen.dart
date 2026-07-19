@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../data/admin_repository.dart';
+import '../../../../core/http/api_error.dart';
 
 class AdminSubscriptionsScreen extends ConsumerStatefulWidget {
   const AdminSubscriptionsScreen({super.key});
@@ -219,7 +220,7 @@ class _AdminSubscriptionsScreenState extends ConsumerState<AdminSubscriptionsScr
       ref.invalidate(adminAnalyticsProvider);
       _snack('Subscription renewed');
     } catch (e) {
-      _snack(e.toString(), error: true);
+      _snack(friendlyMessage(e), error: true);
     }
   }
 
@@ -230,7 +231,7 @@ class _AdminSubscriptionsScreenState extends ConsumerState<AdminSubscriptionsScr
       ref.invalidate(adminAnalyticsProvider);
       _snack('Subscription $status');
     } catch (e) {
-      _snack(e.toString(), error: true);
+      _snack(friendlyMessage(e), error: true);
     }
   }
 
@@ -321,7 +322,7 @@ class _AdminSubscriptionsScreenState extends ConsumerState<AdminSubscriptionsScr
                       ref.invalidate(adminAnalyticsProvider);
                       _snack('Payment marked $s');
                     } catch (e) {
-                      _snack(e.toString(), error: true);
+                      _snack(friendlyMessage(e), error: true);
                     }
                   },
                 )),
@@ -420,7 +421,7 @@ class _AdminSubscriptionsScreenState extends ConsumerState<AdminSubscriptionsScr
                   ref.invalidate(adminAnalyticsProvider);
                   _snack('Subscription created');
                 } catch (e) {
-                  _snack(e.toString(), error: true);
+                  _snack(friendlyMessage(e), error: true);
                 }
               }),
             ],
@@ -483,7 +484,7 @@ class _AdminSubscriptionsScreenState extends ConsumerState<AdminSubscriptionsScr
                   ref.invalidate(adminAnalyticsProvider);
                   _snack('Payment recorded');
                 } catch (e) {
-                  _snack(e.toString(), error: true);
+                  _snack(friendlyMessage(e), error: true);
                 }
               }),
             ],

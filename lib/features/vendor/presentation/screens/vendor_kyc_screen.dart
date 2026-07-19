@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../data/kyc_repository.dart';
 import '../../domain/kyc_models.dart';
+import '../../../../core/http/api_error.dart';
 
 /// Where a vendor gives Enercore the details and documents needed to pay them:
 /// PAN, GST, bank account, cancelled cheque, MOA and AOA.
@@ -80,7 +81,7 @@ class _VendorKycScreenState extends ConsumerState<VendorKycScreen> {
       ref.invalidate(myKycProvider);
       _toast('Details saved');
     } catch (e) {
-      _toast(e.toString().replaceFirst('Exception: ', ''), error: true);
+      _toast(friendlyMessage(e), error: true);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -107,7 +108,7 @@ class _VendorKycScreenState extends ConsumerState<VendorKycScreen> {
       ref.invalidate(myKycProvider);
       _toast('${type.label} uploaded');
     } catch (e) {
-      _toast(e.toString().replaceFirst('Exception: ', ''), error: true);
+      _toast(friendlyMessage(e), error: true);
     } finally {
       if (mounted) setState(() => _uploading = null);
     }
@@ -118,7 +119,7 @@ class _VendorKycScreenState extends ConsumerState<VendorKycScreen> {
       final url = await ref.read(kycRepositoryProvider).myDocumentUrl(type);
       await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
     } catch (e) {
-      _toast(e.toString().replaceFirst('Exception: ', ''), error: true);
+      _toast(friendlyMessage(e), error: true);
     }
   }
 

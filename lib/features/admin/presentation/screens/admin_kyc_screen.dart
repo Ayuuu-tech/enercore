@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../vendor/data/kyc_repository.dart';
 import '../../../vendor/domain/kyc_models.dart';
+import '../../../../core/http/api_error.dart';
 
 /// Enercore reviews a vendor's PAN, GST, bank details and statutory documents
 /// here, and approves or rejects them. A vendor cannot be paid until approved.
@@ -177,7 +178,7 @@ class _KycReviewSheetState extends ConsumerState<_KycReviewSheet> {
       if (mounted) Navigator.of(context).pop();
       _toast(done);
     } catch (e) {
-      _toast(e.toString().replaceFirst('Exception: ', ''), error: true);
+      _toast(friendlyMessage(e), error: true);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -220,7 +221,7 @@ class _KycReviewSheetState extends ConsumerState<_KycReviewSheet> {
           await ref.read(kycRepositoryProvider).vendorDocumentUrl(widget.vendorId, type);
       await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
     } catch (e) {
-      _toast(e.toString().replaceFirst('Exception: ', ''), error: true);
+      _toast(friendlyMessage(e), error: true);
     }
   }
 

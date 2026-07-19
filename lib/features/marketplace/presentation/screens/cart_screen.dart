@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../application/cart_controller.dart';
 import '../../data/marketplace_repository.dart';
 import '../../domain/pricing.dart';
+import '../../../../core/http/api_error.dart';
 
 class CartScreen extends ConsumerStatefulWidget {
   const CartScreen({super.key});
@@ -42,7 +43,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
       if (!mounted) return;
       messenger.showSnackBar(SnackBar(
         backgroundColor: const Color(0xFFEF4444),
-        content: Text(e.toString().replaceFirst('Exception: ', '')),
+        content: Text(friendlyMessage(e)),
       ));
     } finally {
       if (mounted) setState(() => _placing = false);

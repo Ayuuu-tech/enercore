@@ -9,6 +9,7 @@ import '../../../ticketing/data/plants_repository.dart';
 import '../../../ticketing/domain/plant_model.dart';
 import '../../data/telemetry_repository.dart';
 import '../widgets/chart_painters.dart';
+import '../../../../core/http/api_error.dart';
 
 class TelemetryDashboardScreen extends ConsumerStatefulWidget {
   const TelemetryDashboardScreen({super.key});
@@ -90,7 +91,7 @@ class _TelemetryDashboardScreenState extends ConsumerState<TelemetryDashboardScr
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = e.toString();
+        _error = friendlyMessage(e);
       });
     }
   }

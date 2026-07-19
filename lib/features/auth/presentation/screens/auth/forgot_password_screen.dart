@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../data/auth_repository.dart';
+import '../../../../../core/http/api_error.dart';
 
 class ForgotPasswordScreen extends ConsumerStatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -61,7 +62,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
       } catch (e) {
         setState(() {
           _loading = false;
-          _errorMessage = e.toString().replaceFirst('Exception: ', '');
+          _errorMessage = friendlyMessage(e);
         });
       }
     }

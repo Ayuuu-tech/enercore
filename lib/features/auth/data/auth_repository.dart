@@ -1,10 +1,11 @@
 import 'dart:convert';
-import 'dart:io' show Platform, SocketException;
+import 'dart:io' show Platform;
 import 'package:http/http.dart' as http;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../domain/user_model.dart';
+import '../../../core/http/api_error.dart';
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
   return HttpAuthRepository();
@@ -147,7 +148,25 @@ class HttpAuthRepository implements AuthRepository {
         lastErr = e;
       }
     }
-    throw lastErr ?? SocketException('All endpoints unreachable');
+    // Every candidate URL failed to connect — this is a connectivity problem,
+    // not a server rejection, so surface it as one.
+    throw NetworkException(lastErr?.toString() ?? 'unreachable');
+  }
+
+  /// Turns a non-success response into a typed ApiException, pulling the
+  /// server's `message` when the body is JSON. Parsing failures don't mask the
+  /// real status the way a swallowing try/catch did.
+  Never _throwApiError(http.Response response) {
+    String? serverMessage;
+    try {
+      final err = jsonDecode(response.body);
+      final m = err is Map ? err['message'] : null;
+      if (m is String) serverMessage = m;
+      if (m is List && m.isNotEmpty) serverMessage = m.first.toString();
+    } catch (_) {
+      // Body wasn't JSON; fall back to a status-based message below.
+    }
+    throw ApiException(response.statusCode, serverMessage ?? 'Request failed');
   }
 
   @override
@@ -165,12 +184,7 @@ class HttpAuthRepository implements AuthRepository {
       await _persistSession(user);
       return user;
     } else {
-      try {
-        final err = jsonDecode(response.body);
-        throw Exception(err['message'] ?? 'Failed to sign in');
-      } catch (_) {
-        throw Exception('Server error: ${response.statusCode}');
-      }
+      _throwApiError(response);
     }
   }
 
@@ -197,12 +211,7 @@ class HttpAuthRepository implements AuthRepository {
       await _persistSession(user);
       return user;
     } else {
-      try {
-        final err = jsonDecode(response.body);
-        throw Exception(err['message'] ?? 'Failed to register');
-      } catch (_) {
-        throw Exception('Server error: ${response.statusCode}');
-      }
+      _throwApiError(response);
     }
   }
 
@@ -215,12 +224,7 @@ class HttpAuthRepository implements AuthRepository {
     );
 
     if (response.statusCode != 200) {
-      try {
-        final err = jsonDecode(response.body);
-        throw Exception(err['message'] ?? 'Failed to send reset OTP');
-      } catch (_) {
-        throw Exception('Server error: ${response.statusCode}');
-      }
+      _throwApiError(response);
     }
   }
 

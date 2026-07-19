@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../../ticketing/data/plants_repository.dart';
 import '../../../ticketing/domain/plant_model.dart';
 import '../../data/telemetry_repository.dart';
+import '../../../../core/http/api_error.dart';
 
 class ReportsScreen extends ConsumerStatefulWidget {
   const ReportsScreen({super.key});
@@ -98,7 +99,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: const Color(0xFFEF4444),
-          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          content: Text(friendlyMessage(e)),
         ),
       );
     } finally {

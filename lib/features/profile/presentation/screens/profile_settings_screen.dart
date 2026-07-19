@@ -6,6 +6,7 @@ import '../../../auth/application/auth_controller.dart';
 import '../../../auth/domain/user_model.dart';
 import '../../application/profile_controller.dart';
 import '../../data/profile_repository.dart';
+import '../../../../core/http/api_error.dart';
 
 /// [ProfileSettingsScreen] displays the user's profile, security, and
 /// appearance settings with real data fetched from the backend.
@@ -120,7 +121,7 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text(friendlyMessage(e)), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -160,7 +161,7 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to change password: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text(friendlyMessage(e)), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -569,7 +570,7 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
           if (mounted) context.go('/login');
         } catch (e) {
           messenger.showSnackBar(SnackBar(
-            content: Text(e.toString().replaceFirst('Exception: ', '')),
+            content: Text(friendlyMessage(e)),
           ));
         }
       },
