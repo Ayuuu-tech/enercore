@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { captureException } from '../observability/sentry';
 
 /**
  * The last line of defence for anything not caught by a more specific filter.
@@ -39,6 +40,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
           `${request.method} ${request.url} -> ${status}`,
           exception.stack,
         );
+        captureException(exception, { method: request.method, url: request.url });
       }
       response.status(status).json(
         typeof body === 'string'
@@ -53,6 +55,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       `Unhandled ${request.method} ${request.url}`,
       exception instanceof Error ? exception.stack : String(exception),
     );
+    captureException(exception, { method: request.method, url: request.url });
     response.status(status).json({
       statusCode: status,
       timestamp: new Date().toISOString(),

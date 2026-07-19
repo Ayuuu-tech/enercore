@@ -18,7 +18,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  async validate(payload: { sub: string; email: string; role: string }) {
+  async validate(payload: { sub: string; email: string; role: string; tv?: number }) {
     const user = await this.authService.validateUserById(payload.sub);
     if (!user) {
       throw new UnauthorizedException('User not found or invalid token');
@@ -26,6 +26,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     // Disabled accounts are rejected even if they hold a valid token.
     if (!user.isActive) {
       throw new UnauthorizedException('Your account has been disabled');
+    }
+    // A token minted before a password change or "log out all devices" carries
+    // a stale version and is refused — this is how a leaked token is revoked.
+    if ((payload.tv ?? 0) !== user.tokenVersion) {
+      throw new UnauthorizedException('Session expired, please sign in again');
     }
     // Return user to be attached to request.user
     return {

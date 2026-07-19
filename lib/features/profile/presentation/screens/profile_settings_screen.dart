@@ -213,6 +213,7 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
 
                           const SizedBox(height: 20),
                           _logoutButton(),
+                          _logoutAllButton(),
                           const SizedBox(height: 24),
                         ],
                       ),
@@ -555,6 +556,26 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
         icon: const Icon(Icons.logout_rounded, size: 16),
         label: const Text('Logout', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
       ),
+    );
+  }
+
+  Widget _logoutAllButton() {
+    return TextButton.icon(
+      onPressed: () async {
+        final messenger = ScaffoldMessenger.of(context);
+        try {
+          await ref.read(profileRepositoryProvider).logoutAllDevices();
+          await ref.read(authControllerProvider.notifier).logout();
+          if (mounted) context.go('/login');
+        } catch (e) {
+          messenger.showSnackBar(SnackBar(
+            content: Text(e.toString().replaceFirst('Exception: ', '')),
+          ));
+        }
+      },
+      icon: const Icon(Icons.devices_rounded, size: 15, color: Color(0xFF64748B)),
+      label: const Text('Sign out of all devices',
+          style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
     );
   }
 

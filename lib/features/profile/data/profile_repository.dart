@@ -103,5 +103,31 @@ class ProfileRepository {
         throw Exception('Server error: ${response.statusCode}');
       }
     }
+
+    // The server rotates the token version on a password change (signing out
+    // other devices), so it hands back a fresh token — adopt it, or this very
+    // session would be logged out on its next request.
+    try {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final newToken = data['accessToken'] as String?;
+      if (newToken != null && newToken.isNotEmpty) {
+        await _authRepository.updateToken(newToken);
+      }
+    } catch (_) {
+      // No token in the body is fine; nothing to adopt.
+    }
+  }
+
+  /// Revokes this account's tokens on every device (including this one), then
+  /// clears the local session so the app returns to the login screen.
+  Future<void> logoutAllDevices() async {
+    final response = await httpPost(
+      Uri.parse('$baseUrl/auth/logout-all'),
+      headers: _headers,
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to sign out of all devices');
+    }
+    await _authRepository.logout();
   }
 }

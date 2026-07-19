@@ -47,4 +47,12 @@ export class AuthController {
   ) {
     return this.authService.changePassword(user.id, dto);
   }
+
+  // Revokes every token this user holds, on every device.
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @Post('logout-all')
+  async logoutAll(@CurrentUser() user: UserEntity) {
+    return this.authService.logoutAllDevices(user.id);
+  }
 }

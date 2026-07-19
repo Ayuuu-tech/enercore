@@ -14,6 +14,10 @@ abstract class AuthRepository {
   String get baseUrl;
   String? get token;
 
+  /// Replaces the stored access token (e.g. the fresh one returned after a
+  /// password change) so the session keeps working with the new credentials.
+  Future<void> updateToken(String newToken);
+
   Future<UserModel> login(String email, String password);
   Future<UserModel> register(
       String email, String password, String name, String role, {String? phone});
@@ -79,6 +83,13 @@ class HttpAuthRepository implements AuthRepository {
 
   @override
   String? get token => _token;
+
+  @override
+  Future<void> updateToken(String newToken) async {
+    _token = newToken;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kToken, newToken);
+  }
 
   @override
   String get baseUrl {

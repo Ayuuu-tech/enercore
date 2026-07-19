@@ -64,7 +64,6 @@ export class AuthService {
       return newUser;
     });
 
-    const payload = { sub: user.id, email: user.email, role: user.role };
     return {
       user: {
         id: user.id,
@@ -72,8 +71,20 @@ export class AuthService {
         name: user.name,
         role: user.role,
       },
-      accessToken: this.jwtService.sign(payload),
+      accessToken: this.signToken(user),
     };
+  }
+
+  // Signs an access token carrying the user's current token version. A token
+  // is only accepted while its `tv` still matches the user's — bumping the
+  // version (password change, log-out-all) invalidates every token at once.
+  private signToken(user: { id: string; email: string; role: Role; tokenVersion: number }) {
+    return this.jwtService.sign({
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+      tv: user.tokenVersion,
+    });
   }
 
   async login(dto: LoginDto) {
@@ -97,7 +108,6 @@ export class AuthService {
       throw new UnauthorizedException('Your account has been disabled. Contact the administrator.');
     }
 
-    const payload = { sub: user.id, email: user.email, role: user.role };
     return {
       user: {
         id: user.id,
@@ -113,7 +123,7 @@ export class AuthService {
         avatarUrl: user.avatarUrl,
         vendorProfile: user.vendorProfile,
       },
-      accessToken: this.jwtService.sign(payload),
+      accessToken: this.signToken(user),
     };
   }
 
@@ -129,12 +139,30 @@ export class AuthService {
     }
 
     const hashedPassword = await bcrypt.hash(dto.newPassword, 10);
-    await this.prisma.user.update({
+    // Bumping the version signs out every other session that held a token from
+    // the old password. We hand back a fresh token so the caller's own session
+    // survives the change instead of being logged out too.
+    const updated = await this.prisma.user.update({
       where: { id: userId },
-      data: { password: hashedPassword },
+      data: { password: hashedPassword, tokenVersion: { increment: 1 } },
     });
 
-    return { message: 'Password changed successfully' };
+    return {
+      message: 'Password changed successfully',
+      accessToken: this.signToken(updated),
+    };
+  }
+
+  /**
+   * "Log out of all devices": invalidates every access token this user holds,
+   * including the current one, by advancing the token version.
+   */
+  async logoutAllDevices(userId: string) {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { tokenVersion: { increment: 1 } },
+    });
+    return { message: 'Signed out of all devices' };
   }
 
   private readonly resetTokens = new Map<string, { token: string; expiresAt: Date }>();

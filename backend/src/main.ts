@@ -3,11 +3,15 @@ import { AppModule } from './app.module';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { initSentry } from './common/observability/sentry';
 import * as express from 'express';
 import helmet from 'helmet';
 import { join } from 'path';
 
 async function bootstrap() {
+  // Must run before the app is created so Sentry can instrument early.
+  initSentry();
+
   const app = await NestFactory.create(AppModule);
 
   // Security headers.

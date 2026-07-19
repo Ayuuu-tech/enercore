@@ -74,6 +74,10 @@ model User {
   name           String
   role           Role            @default(CLIENT)
   isActive       Boolean         @default(true)
+  // Bumped to invalidate every access token this user holds at once — on a
+  // password change, or an explicit "log out all devices". A token whose `tv`
+  // claim no longer matches this value is rejected.
+  tokenVersion   Int             @default(0)
   // Modules/features this user may access. Empty = all (default).
   modules        String[]        @default([])
   phone          String?
