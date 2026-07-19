@@ -6,6 +6,7 @@ import { AuthService } from './application/auth.service';
 import { AuthController } from './presentation/auth.controller';
 import { JwtStrategy } from './presentation/strategies/jwt.strategy';
 import { PrismaModule } from '../../common/prisma/prisma.module';
+import { resolveJwtSecret } from '../../common/config/jwt-secret';
 
 @Module({
   imports: [
@@ -14,7 +15,7 @@ import { PrismaModule } from '../../common/prisma/prisma.module';
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_SECRET') || 'enercore-super-secret-jwt-key-2026',
+        secret: resolveJwtSecret(configService),
         signOptions: {
           expiresIn: (configService.get<string>('JWT_EXPIRES_IN') || '7d') as any,
         },

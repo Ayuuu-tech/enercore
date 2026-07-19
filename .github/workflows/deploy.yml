@@ -22,6 +22,10 @@ jobs:
     name: Build and deploy to Azure
     runs-on: ubuntu-latest
     environment: production
+    env:
+      # Exposed job-wide so the migrate step's `if:` guard can see whether the
+      # secret is set (secrets can't be read directly in an `if` expression).
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
     defaults:
       run:
         working-directory: backend
@@ -39,6 +43,13 @@ jobs:
       - run: npm ci
       - run: npx prisma generate
       - run: npm run build
+
+      # Apply any pending schema migrations from the runner (it can reach
+      # Supabase; the App Service ships without the Prisma CLI). Guarded on the
+      # secret so a missing DATABASE_URL skips rather than fails the deploy.
+      - name: Apply database migrations
+        if: ${{ env.DATABASE_URL != '' }}
+        run: npx prisma migrate deploy
 
       # …then reduce to what production actually runs. Oryx times out compiling
       # Nest on a B1, so we ship a prebuilt artefact and leave Azure's build off.

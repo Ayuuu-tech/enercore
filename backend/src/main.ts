@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import * as express from 'express';
 import helmet from 'helmet';
 import { join } from 'path';
@@ -40,8 +41,10 @@ async function bootstrap() {
     }),
   );
 
-  // Use global Prisma Database constraints exception filter
-  app.useGlobalFilters(new PrismaExceptionFilter());
+  // Exception filters run last-registered-first, so the catch-all is registered
+  // first and the specific Prisma filter second — Prisma errors hit the Prisma
+  // filter, and everything else falls through to the catch-all.
+  app.useGlobalFilters(new AllExceptionsFilter(), new PrismaExceptionFilter());
 
   const port = process.env.PORT || 3000;
   await app.listen(port, '0.0.0.0');
