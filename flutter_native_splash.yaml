@@ -1,11 +1,10 @@
+# Native launch screen (shown by the OS before Flutter starts). Matched to the
+# in-app Dart splash: the same soft mint-green background and the same centred
+# logo, so the OS splash flows into the animated splash without a white flash.
 flutter_native_splash:
-  color: "#FFFFFF"
+  color: "#EAF6F1"
   image: "assets/images/logo.png"
-  web: true
-  macos: true
-  windows: true
-  linux: true
 
   android_12:
+    color: "#EAF6F1"
     image: "assets/images/logo.png"
-    color: "#FFFFFF"

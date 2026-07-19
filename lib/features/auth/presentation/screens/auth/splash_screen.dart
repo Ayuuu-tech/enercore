@@ -71,6 +71,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // Matches the native launch screen so the OS→Flutter hand-off has no flash.
+      backgroundColor: const Color(0xFFEAF6F1),
       body: Stack(
         fit: StackFit.expand,
         children: [
