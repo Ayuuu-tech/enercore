@@ -18,7 +18,6 @@ class ProfileSettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
-  int _selectedNav = 5;
   int _selectedTab = 0;
   bool _twoFactorEnabled = false;
 
@@ -581,14 +580,44 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
   }
 
   Widget _bottomNav() {
-    final items = [
-      (Icons.home_rounded, 'Home'),
-      (Icons.solar_power_rounded, 'Plants'),
-      (Icons.sensors_rounded, 'Telemetry'),
-      (Icons.receipt_long_rounded, 'Billing'),
-      (Icons.confirmation_number_outlined, 'Tickets'),
-    ];
-    final List<String?> routes = ['/client-dashboard', '/solar-grid', '/telemetry', '/billing', '/tickets'];
+    // The profile screen is reachable from every role's dashboard, so its nav
+    // has to match whoever is signed in — an admin was seeing the client tabs.
+    final role = ref.watch(authControllerProvider).asData?.value?.role.toUpperCase();
+
+    late final List<(IconData, String)> items;
+    late final List<String?> routes;
+    switch (role) {
+      case 'ADMIN':
+        items = const [
+          (Icons.home_rounded, 'Home'),
+          (Icons.group_rounded, 'Users'),
+          (Icons.solar_power_rounded, 'Plants'),
+          (Icons.card_membership_rounded, 'Billing'),
+          (Icons.history_rounded, 'Audit'),
+          (Icons.person_rounded, 'Profile'),
+        ];
+        routes = ['/admin-dashboard', '/admin-users', '/admin-plants', '/admin-subscriptions', '/admin-audit', null];
+      case 'VENDOR':
+        items = const [
+          (Icons.home_rounded, 'Home'),
+          (Icons.inventory_2_rounded, 'Products'),
+          (Icons.receipt_long_rounded, 'Orders'),
+          (Icons.storefront_rounded, 'Store'),
+          (Icons.person_rounded, 'Profile'),
+        ];
+        routes = ['/vendor-dashboard', '/vendor-products', '/vendor-orders', '/vendor-store', null];
+      default:
+        items = const [
+          (Icons.home_rounded, 'Home'),
+          (Icons.solar_power_rounded, 'Plants'),
+          (Icons.sensors_rounded, 'Telemetry'),
+          (Icons.receipt_long_rounded, 'Billing'),
+          (Icons.confirmation_number_outlined, 'Tickets'),
+        ];
+        routes = ['/client-dashboard', '/solar-grid', '/telemetry', '/billing', '/tickets'];
+    }
+    // The Profile tab (a null route, when present) marks the current screen.
+    final activeIndex = routes.indexOf(null);
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -598,14 +627,11 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: List.generate(items.length, (i) {
-          final active = _selectedNav == i;
+          final active = activeIndex == i;
           return GestureDetector(
             onTap: () {
-            if (routes[i] != null) {
-              context.push(routes[i]!);
-            } else {
-              setState(() => _selectedNav = i);
-            }
+              // The null-route tab is the current (Profile) screen — no-op.
+              if (routes[i] != null) context.push(routes[i]!);
             },
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
