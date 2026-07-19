@@ -21,6 +21,7 @@ import { OrdersModule } from './modules/orders/orders.module';
 import { TicketingModule } from './modules/ticketing/ticketing.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { SettingsModule } from './modules/settings/settings.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { AdminModule } from './modules/admin/admin.module';
     TicketingModule,
     NotificationModule,
     AdminModule,
+    SettingsModule,
   ],
   controllers: [AppController],
   providers: [

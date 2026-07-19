@@ -10,6 +10,7 @@ import '../../../ticketing/domain/plant_model.dart';
 import '../../data/telemetry_repository.dart';
 import '../widgets/chart_painters.dart';
 import '../../../../core/http/api_error.dart';
+import '../../../../core/widgets/app_logo.dart';
 
 class TelemetryDashboardScreen extends ConsumerStatefulWidget {
   const TelemetryDashboardScreen({super.key});
@@ -236,11 +237,7 @@ class _TelemetryDashboardScreenState extends ConsumerState<TelemetryDashboardScr
             child: const Icon(Icons.arrow_back_rounded, color: _slateDark, size: 22),
           ),
           const SizedBox(width: 12),
-          Image.asset(
-            'assets/images/logo.png',
-            height: 46,
-            fit: BoxFit.contain,
-          ),
+          const AppLogo(height: 46),
           const Spacer(),
           GestureDetector(
             onTap: () => context.push('/reports'),

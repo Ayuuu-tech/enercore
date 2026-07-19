@@ -28,6 +28,7 @@ import '../../features/admin/presentation/screens/admin_plants_screen.dart';
 import '../../features/admin/presentation/screens/admin_audit_screen.dart';
 import '../../features/admin/presentation/screens/admin_tickets_screen.dart';
 import '../../features/admin/presentation/screens/admin_features_screen.dart';
+import '../../features/admin/presentation/screens/admin_branding_screen.dart';
 import '../../features/vendor/presentation/screens/vendor_dashboard_screen.dart';
 import '../../features/vendor/presentation/screens/vendor_products_screen.dart';
 import '../../features/vendor/presentation/screens/vendor_add_product_screen.dart';
@@ -191,6 +192,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     GoRoute(
       path: '/admin-features',
       builder: (context, state) => const AdminFeaturesScreen(),
+    ),
+    GoRoute(
+      path: '/admin-branding',
+      builder: (context, state) => const AdminBrandingScreen(),
     ),
     GoRoute(
       path: '/marketplace',

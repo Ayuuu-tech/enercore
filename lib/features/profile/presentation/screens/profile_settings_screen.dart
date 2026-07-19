@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart';
 import '../../../auth/application/auth_controller.dart';
 import '../../../auth/domain/user_model.dart';
 import '../../application/profile_controller.dart';
 import '../../data/profile_repository.dart';
 import '../../../../core/http/api_error.dart';
+import '../../../../core/widgets/app_logo.dart';
 
 /// [ProfileSettingsScreen] displays the user's profile, security, and
 /// appearance settings with real data fetched from the backend.
@@ -244,7 +244,7 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
             child: const Icon(Icons.arrow_back_rounded, color: _slateDark, size: 22),
           ),
           const SizedBox(width: 12),
-          Image.asset('assets/images/logo.png', height: 46, fit: BoxFit.contain),
+          const AppLogo(height: 46),
           const Spacer(),
           Consumer(builder: (context, ref, _) {
             final user = ref.watch(authControllerProvider).asData?.value;
@@ -255,41 +255,10 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
     );
   }
 
-  Future<void> _pickAndUploadAvatar() async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery, maxWidth: 512, maxHeight: 512);
-    if (picked == null) return;
-    try {
-      await ref.read(profileControllerProvider.notifier).uploadAvatar(picked);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Photo updated'), backgroundColor: _teal),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed: $e'), backgroundColor: Colors.red),
-        );
-      }
-    }
-  }
-
   Widget _userInfoHeader(UserModel user) {
     return Column(
       children: [
-        GestureDetector(onTap: _pickAndUploadAvatar, child: Stack(
-          children: [
-            _avatar(38, url: user.avatarUrl, name: user.name),
-            Positioned(bottom: 0, right: 0,
-              child: Container(
-                width: 26, height: 26,
-                decoration: const BoxDecoration(color: _teal, shape: BoxShape.circle),
-                child: const Icon(Icons.camera_alt, color: Colors.white, size: 14),
-              ),
-            ),
-          ],
-        )),
+        _avatar(38, url: user.avatarUrl, name: user.name),
         const SizedBox(height: 10),
         Text(
           user.name,

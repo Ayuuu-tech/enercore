@@ -9,6 +9,7 @@ import '../../../profile/application/profile_controller.dart';
 import '../../../../core/widgets/user_avatar.dart';
 import '../widgets/plant_map_view.dart';
 import '../../../../core/widgets/interactive_line_chart.dart';
+import '../../../../core/widgets/app_logo.dart';
 
 class ClientDashboardScreen extends ConsumerStatefulWidget {
   const ClientDashboardScreen({super.key});
@@ -196,11 +197,7 @@ class _ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
-          Image.asset(
-            'assets/images/logo.png',
-            height: 46,
-            fit: BoxFit.contain,
-          ),
+          const AppLogo(height: 46),
           const Spacer(),
           GestureDetector(
             onTap: () => context.push('/notifications'),

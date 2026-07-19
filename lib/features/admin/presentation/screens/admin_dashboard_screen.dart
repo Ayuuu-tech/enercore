@@ -5,6 +5,7 @@ import '../../../auth/application/auth_controller.dart';
 import '../../../notifications/data/notifications_repository.dart';
 import '../../../../core/widgets/user_avatar.dart';
 import '../../data/admin_repository.dart';
+import '../../../../core/widgets/app_logo.dart';
 
 class AdminDashboardScreen extends ConsumerStatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -148,7 +149,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
-          Image.asset('assets/images/logo.png', height: 46, fit: BoxFit.contain),
+          const AppLogo(height: 46),
           const Spacer(),
           GestureDetector(
             onTap: () => context.push('/notifications'),
@@ -281,6 +282,8 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
           _manageRow(Icons.confirmation_number_rounded, 'Support Tickets', 'All tickets raised by clients', '/admin-tickets'),
           _divider(),
           _manageRow(Icons.history_rounded, 'Audit Log', 'Trail of admin actions', '/admin-audit'),
+          _divider(),
+          _manageRow(Icons.palette_rounded, 'Branding', 'App logo shown in every header', '/admin-branding'),
         ],
       ),
     );
@@ -399,7 +402,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: [Image.asset('assets/images/logo.png', height: 20)],
+          children: [const AppLogo(height: 20)],
         ),
         const SizedBox(height: 6),
         const Text('© 2024 Enercore. All rights reserved.',

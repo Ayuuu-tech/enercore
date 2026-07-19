@@ -67,6 +67,14 @@ enum PaymentStatus {
   REFUNDED
 }
 
+// Small key/value store for app-wide settings an admin can change at runtime
+// (e.g. the branding logo URL) without a redeploy.
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
 model User {
   id             String          @id @default(uuid())
   email          String          @unique
