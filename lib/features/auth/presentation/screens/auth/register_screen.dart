@@ -172,7 +172,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
 
         // Heading
         Text(
-          'Request Access',
+          'Create your account',
           style: TextStyle(
             color: Colors.grey.shade900,
             fontSize: 28,
@@ -182,7 +182,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
         ),
         const SizedBox(height: 6),
         Text(
-          'Fill in your details and our team will get back to you',
+          'Sign up to start shopping on Enercore',
           style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
         ),
         const SizedBox(height: 28),
@@ -321,7 +321,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                     child: CircularProgressIndicator(
                         color: Colors.white, strokeWidth: 2),
                   )
-                : const Text('Submit Request',
+                : const Text('Create account',
                     style: TextStyle(
                         fontSize: 15, fontWeight: FontWeight.w600)),
           ),
