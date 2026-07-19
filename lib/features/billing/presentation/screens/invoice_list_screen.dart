@@ -157,7 +157,7 @@ class _InvoiceListScreenState extends ConsumerState<InvoiceListScreen> {
             fit: BoxFit.contain,
           ),
           const Spacer(),
-          const UserAvatar(size: 32),
+          UserAvatar(size: 32, onTap: () => context.push('/profile')),
         ],
       ),
     );

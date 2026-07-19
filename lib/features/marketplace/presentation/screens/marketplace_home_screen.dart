@@ -147,7 +147,7 @@ class _MarketplaceHomeScreenState extends ConsumerState<MarketplaceHomeScreen> {
           const Spacer(),
           _cartButton(),
           const SizedBox(width: 14),
-          const UserAvatar(size: 32),
+          UserAvatar(size: 32, onTap: () => context.push('/profile')),
         ],
       ),
     );

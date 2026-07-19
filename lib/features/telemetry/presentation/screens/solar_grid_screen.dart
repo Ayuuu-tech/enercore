@@ -235,7 +235,7 @@ class _SolarGridScreenState extends ConsumerState<SolarGridScreen> {
             fit: BoxFit.contain,
           ),
           const Spacer(),
-          const UserAvatar(size: 32),
+          UserAvatar(size: 32, onTap: () => context.push('/profile')),
         ],
       ),
     );

@@ -246,7 +246,7 @@ class _TelemetryDashboardScreenState extends ConsumerState<TelemetryDashboardScr
               child: Icon(Icons.description_outlined, color: _slateDark, size: 21),
             ),
           ),
-          const UserAvatar(size: 32),
+          UserAvatar(size: 32, onTap: () => context.push('/profile')),
         ],
       ),
     );

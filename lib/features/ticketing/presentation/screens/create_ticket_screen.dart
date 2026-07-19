@@ -114,7 +114,7 @@ class _CreateTicketScreenState extends ConsumerState<CreateTicketScreen> {
             fit: BoxFit.contain,
           ),
           const Spacer(),
-          const UserAvatar(size: 32),
+          UserAvatar(size: 32, onTap: () => context.push('/profile')),
         ],
       ),
     );

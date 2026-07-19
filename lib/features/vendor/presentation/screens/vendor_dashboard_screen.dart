@@ -72,6 +72,8 @@ class VendorDashboardScreen extends ConsumerWidget {
                       ),
                       const SizedBox(height: 24),
                       _addProductButton(context, ref),
+                      const SizedBox(height: 12),
+                      _businessDetailsButton(context),
                       const SizedBox(height: 24),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -206,6 +208,51 @@ class VendorDashboardScreen extends ConsumerWidget {
         },
         icon: const Icon(Icons.add_rounded, size: 18),
         label: const Text('List New Product', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+      ),
+    );
+  }
+
+  /// Always-present entry to the KYC screen, where the vendor enters their PAN,
+  /// GST, bank details and uploads statutory documents. Previously this was only
+  /// reachable through the conditional banner, which vanished once KYC was
+  /// approved — leaving no way back to view or update the documents.
+  Widget _businessDetailsButton(BuildContext context) {
+    return GestureDetector(
+      onTap: () => context.push('/vendor-kyc'),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: VendorTheme.cardBorder, width: 1),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE8F3EF),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.description_rounded, color: VendorTheme.teal, size: 20),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Business & Bank Details',
+                      style: TextStyle(color: VendorTheme.slateDark, fontSize: 13.5, fontWeight: FontWeight.w800)),
+                  SizedBox(height: 2),
+                  Text('PAN, GST, bank account & documents',
+                      style: TextStyle(color: VendorTheme.slateLight, fontSize: 11, fontWeight: FontWeight.w500)),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded, color: VendorTheme.slateLight, size: 22),
+          ],
+        ),
       ),
     );
   }
